@@ -1,0 +1,104 @@
+name: Generate FlexFL Buggy Program
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout FlexFL repository
+        uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          java -version
+          mvn -version
+          python3 --version
+          git --version
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            subversion \
+            perl \
+            curl \
+            unzip \
+            maven
+
+      - name: Install Defects4J
+        run: |
+          cd tools
+
+          git clone https://github.com/rjust/defects4j.git defects4j-2.0.0
+          cd defects4j-2.0.0
+
+          git checkout v2.0.0
+
+          cpanm --installdeps .
+
+          ./init.sh
+
+          echo "$(pwd)/framework/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Defects4J
+        run: |
+          tools/defects4j-2.0.0/framework/bin/defects4j info -p Time
+
+      - name: Show selected bugs
+        run: |
+          cat prepare/buggy_program/bug_list.txt
+
+      - name: Checkout buggy and fixed repositories
+        working-directory: prepare/buggy_program
+        run: |
+          bash checkout.sh
+
+      - name: Inspect checked-out repositories
+        run: |
+          find prepare/buggy_program/Collect_Methods/repos \
+            -maxdepth 1 \
+            -type d \
+            -print
+
+      - name: Generate Java file lists
+        working-directory: prepare/buggy_program
+        run: |
+          python3 get_files.py
+
+      - name: Build method extractor
+        working-directory: prepare/buggy_program/Collect_Methods
+        run: |
+          mvn clean install
+
+      - name: Extract methods
+        working-directory: prepare/buggy_program/Collect_Methods
+        run: |
+          bash run.sh
+
+      - name: Inspect generated files
+        run: |
+          echo "Buggy methods:"
+          find prepare/buggy_program/methods_buggy_Defects4j \
+            -type f | head -20
+
+          echo "Fixed methods:"
+          find prepare/buggy_program/methods_fixed_Defects4j \
+            -type f | head -20
+
+          du -sh prepare/buggy_program/methods_buggy_Defects4j || true
+          du -sh prepare/buggy_program/methods_fixed_Defects4j || true
+
+      - name: Save generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlexFL-Time25-method-data
+          path: |
+            prepare/buggy_program/methods_buggy_Defects4j
+            prepare/buggy_program/methods_fixed_Defects4j
+            prepare/buggy_program/file_lists_buggy
+            prepare/buggy_program/file_lists_fixed
+          retention-days: 5
