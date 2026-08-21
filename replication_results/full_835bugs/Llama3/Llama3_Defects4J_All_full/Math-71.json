@@ -1,0 +1,142 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* get_code_snippet_of_method(`method_number`) -> Get the code snippet of the java method. `method_number` -> The number of the java methods suggested. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer.  *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:ODE integrator goes past specified end of integration range\nDescription:\n\nEnd of integration range in ODE solving is handled as an event.\nIn some cases, numerical accuracy in events detection leads to error in events location.\nThe following test case shows the end event is not handled properly and an integration that should cover a 60s range in fact covers a 160s range, more than twice the specified range.\n\n  public void testMissedEvent() throws IntegratorException, DerivativeException {\n          final double t0 = 1878250320.0000029;\n          final double t =  1878250379.9999986;\n          FirstOrderDifferentialEquations ode = new FirstOrderDifferentialEquations() {\n            \n            public int getDimension() {\n                return 1;\n            }\n            \n            public void computeDerivatives(double t, double[] y, double[] yDot)\n                throws DerivativeException {\n                yDot[0] = y[0] * 1.0e-6;\n            }\n        };\n\n        DormandPrince853Integrator integrator = new DormandPrince853Integrator(0.0, 100.0,\n                                                                               1.0e-10, 1.0e-10);\n\n        double[] y = { 1.0 };\n        integrator.setInitialStepSize(60.0);\n        double finalT = integrator.integrate(ode, t0, y, t, y);\n        Assert.assertEquals(t, finalT, 1.0e-6);\n    }\n\n\n\n\n\n```\nThe trigger test is as follows:\n```\npublic void testMissedEndEvent() throws IntegratorException, DerivativeException {\n      final double   t0     = 1878250320.0000029;\n      final double   tEvent = 1878250379.9999986;\n      final double[] k      = { 1.0e-4, 1.0e-5, 1.0e-6 };\n      FirstOrderDifferentialEquations ode = new FirstOrderDifferentialEquations() {\n\n          public int getDimension() {\n              return k.length;\n          }\n\n          public void computeDerivatives(double t, double[] y, double[] yDot) {\n              for (int i = 0; i < y.length; ++i) {\n                  yDot[i] = k[i] * y[i];\n              }\n          }\n      };\n\n      ClassicalRungeKuttaIntegrator integrator = new ClassicalRungeKuttaIntegrator(60.0);\n\n      double[] y0   = new double[k.length];\n      for (int i = 0; i < y0.length; ++i) {\n          y0[i] = i + 1;\n      }\n      double[] y    = new double[k.length];\n\n      double finalT = integrator.integrate(ode, t0, y0, tEvent, y);\n      Assert.assertEquals(tEvent, finalT, 5.0e-6);\nThe last line shown above failed with the following stack trace.\njunit.framework.AssertionFailedError: expected:<1.8782503799999986E9> but was:<1.878250439999994E9>\n\tat org.apache.commons.math.ode.nonstiff.ClassicalRungeKuttaIntegratorTest.testMissedEndEvent(ClassicalRungeKuttaIntegratorTest.java:70)\n```\nThe suggested methods are as follows:\n```\n1.org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.FirstOrderIntegratorWithJacobians(FirstOrderIntegrator,ODEWithJacobians)\n2.org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[])\n3.org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.initializeStep(FirstOrderDifferentialEquations,boolean,int,double[],double,double[],double[],double[],double[])\n4.org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.addStepHandler(StepHandlerWithJacobians)\n5.org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.setInitialStepSize(double)\n6.org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.setInitialStepSize(double)\n7.org.apache.commons.math.ode.sampling.DummyStepInterpolator.computeInterpolatedStateAndDerivatives(double,double)\n8.org.apache.commons.math.ode.sampling.DummyStepInterpolator.DummyStepInterpolator(double[],double[],boolean)\n9.org.apache.commons.math.ode.events.CombinedEventsManager.isEmpty()\n10.org.apache.commons.math.ode.sampling.AbstractStepInterpolator.AbstractStepInterpolator(double[],boolean)\n11.org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.integrate(double,double[],double[][],double,double[],double[][],double[][])\n12.org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[])\n13.org.apache.commons.math.ode.nonstiff.EmbeddedRungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[])\n14.org.apache.commons.math.ode.nonstiff.AdamsMoultonIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[])\n15.org.apache.commons.math.ode.nonstiff.AdamsBashforthIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[])\n16.org.apache.commons.math.ode.nonstiff.GillStepInterpolator.computeInterpolatedStateAndDerivatives(double,double)\n17.org.apache.commons.math.ode.nonstiff.GillIntegrator.GillIntegrator(double)\n18.org.apache.commons.math.ode.nonstiff.GillStepInterpolator.doCopy()\n19.org.apache.commons.math.ode.nonstiff.GillIntegrator.GillIntegrator(double)\n20.org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[])\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the bug report and the trigger test, I can identify the following:\n\n1. The bug is related to the ODE integrator going past the specified end of integration range.\n2. The trigger test is failing, indicating that the integrator is not handling the end event properly.\n3. The test case is using the `ClassicalRungeKuttaIntegrator` class, which is a specific type of ODE integrator.\n\nGiven these points, I plan to focus on the methods related to the ODE integrator and the event handling. I will start by calling the `get_code_snippet_of_method` function to retrieve the code snippets of the methods suggested.\n\nMy initial top-5 most likely culprit methods are:\n\n1. `org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations, double, double[], double, double)`\n2. `org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.integrate(FirstOrderDifferentialEquations, double, double[], double, double)`\n3. `org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.integrate(double, double[], double[][], double, double[], double[][], double[][])`\n4. `org.apache.commons.math.ode.events.CombinedEventsManager.isEmpty()`\n5. `org.apache.commons.math.ode.sampling.DummyStepInterpolator.computeInterpolatedStateAndDerivatives(double, double)`\n\nI will start by examining the code snippets of these methods to see if I can identify any potential issues related to the bug."
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(1)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.FirstOrderIntegratorWithJacobians(FirstOrderIntegrator,ODEWithJacobians) is as follows.\n/** Build an enhanced integrator using ODE builtin jacobian computation features.\t     * @param integrator underlying integrator to solve the compound problem\t     * @param ode original problem, which can compute the jacobians by itself\t     * @see #FirstOrderIntegratorWithJacobians(FirstOrderIntegrator,\t     * ParameterizedODE, double[], double[], double[])\t     */\t    public FirstOrderIntegratorWithJacobians(final FirstOrderIntegrator integrator,\t                                             final ODEWithJacobians ode) {\t        this.integrator = integrator;\t        this.ode = ode;\t        setMaxEvaluations(-1);\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(2)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations,double,double[],double,double[]) is as follows.\n/** {@inheritDoc} */\t  public double integrate(final FirstOrderDifferentialEquations equations,\t                          final double t0, final double[] y0,\t                          final double t, final double[] y)\t  throws DerivativeException, IntegratorException {\t\t    sanityChecks(equations, t0, y0, t, y);\t    setEquations(equations);\t    resetEvaluations();\t    final boolean forward = t > t0;\t\t    // create some internal working arrays\t    final int stages = c.length + 1;\t    if (y != y0) {\t      System.arraycopy(y0, 0, y, 0, y0.length);\t    }\t    final double[][] yDotK = new double[stages][];\t    for (int i = 0; i < stages; ++i) {\t      yDotK [i] = new double[y0.length];\t    }\t    final double[] yTmp = new double[y0.length];\t\t    // set up an interpolator sharing the integrator arrays\t    AbstractStepInterpolator interpolator;\t    if (requiresDenseOutput() || (! eventsHandlersManager.isEmpty())) {\t      final RungeKuttaStepInterpolator rki = (RungeKuttaStepInterpolator) prototype.copy();\t      rki.reinitialize(this, yTmp, yDotK, forward);\t      interpolator = rki;\t    } else {\t      interpolator = new DummyStepInterpolator(yTmp, yDotK[stages - 1], forward);\t    }\t    interpolator.storeTime(t0);\t\t    // set up integration control objects\t    stepStart = t0;\t    stepSize  = forward ? step : -step;\t    for (StepHandler handler : stepHandlers) {\t        handler.reset();\t    }\t    CombinedEventsManager manager = addEndTimeChecker(t0, t, eventsHandlersManager);\t    boolean lastStep = false;\t\t    // main integration loop\t    while (!lastStep) {\t\t      interpolator.shift();\t\t      for (boolean loop = true; loop;) {\t\t        // first stage\t        computeDerivatives(stepStart, y, yDotK[0]);\t\t        // next stages\t        for (int k = 1; k < stages; ++k) {\t\t          for (int j = 0; j < y0.length; ++j) {\t            double sum = a[k-1][0] * yDotK[0][j];\t            for (int l = 1; l < k; ++l) {\t              sum += a[k-1][l] * yDotK[l][j];\t            }\t            yTmp[j] = y[j] + stepSize * sum;\t          }\t\t          computeDerivatives(stepStart + c[k-1] * stepSize, yTmp, yDotK[k]);\t\t        }\t\t        // estimate the state at the end of the step\t        for (int j = 0; j < y0.length; ++j) {\t          double sum    = b[0] * yDotK[0][j];\t          for (int l = 1; l < stages; ++l) {\t            sum    += b[l] * yDotK[l][j];\t          }\t          yTmp[j] = y[j] + stepSize * sum;\t        }\t\t        // discrete events handling\t        interpolator.storeTime(stepStart + stepSize);\t        if (manager.evaluateStep(interpolator)) {\t            final double dt = manager.getEventTime() - stepStart;\t            if (Math.abs(dt) <= Math.ulp(stepStart)) {\t                // we cannot simply truncate the step, reject the current computation\t                // and let the loop compute another state with the truncated step.\t                // it is so small (much probably exactly 0 due to limited accuracy)\t                // that the code above would fail handling it.\t                // So we set up an artificial 0 size step by copying states\t                loop     = false;\t            } else {\t                // reject the step to match exactly the next switch time\t                stepSize = dt;\t            }\t        } else {\t          loop = false;\t        }\t\t      }\t\t      // the step has been accepted\t      final double nextStep = stepStart + stepSize;\t      System.arraycopy(yTmp, 0, y, 0, y0.length);\t      manager.stepAccepted(nextStep, y);\t      lastStep = manager.stop();\t\t      // provide the step data to the step handler\t      interpolator.storeTime(nextStep);\t      for (StepHandler handler : stepHandlers) {\t          handler.handleStep(interpolator, lastStep);\t      }\t      stepStart = nextStep;\t\t      if (manager.reset(stepStart, y) && ! lastStep) {\t        // some events handler has triggered changes that\t        // invalidate the derivatives, we need to recompute them\t        computeDerivatives(stepStart, y, yDotK[0]);\t      }\t\t      // make sure step size is set to default before next step\t      stepSize = forward ? step : -step;\t\t    }\t\t    final double stopTime = stepStart;\t    stepStart = Double.NaN;\t    stepSize  = Double.NaN;\t    return stopTime;\t\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(3)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.initializeStep(FirstOrderDifferentialEquations,boolean,int,double[],double,double[],double[],double[],double[]) is as follows.\n/** Initialize the integration step.\t   * @param equations differential equations set\t   * @param forward forward integration indicator\t   * @param order order of the method\t   * @param scale scaling vector for the state vector\t   * @param t0 start time\t   * @param y0 state vector at t0\t   * @param yDot0 first time derivative of y0\t   * @param y1 work array for a state vector\t   * @param yDot1 work array for the first time derivative of y1\t   * @return first integration step\t   * @exception DerivativeException this exception is propagated to\t   * the caller if the underlying user function triggers one\t   */\t  public double initializeStep(final FirstOrderDifferentialEquations equations,\t                               final boolean forward, final int order, final double[] scale,\t                               final double t0, final double[] y0, final double[] yDot0,\t                               final double[] y1, final double[] yDot1)\t      throws DerivativeException {\t\t    if (initialStep > 0) {\t      // use the user provided value\t      return forward ? initialStep : -initialStep;\t    }\t\t    // very rough first guess : h = 0.01 * ||y/scale|| / ||y'/scale||\t    // this guess will be used to perform an Euler step\t    double ratio;\t    double yOnScale2 = 0;\t    double yDotOnScale2 = 0;\t    for (int j = 0; j < y0.length; ++j) {\t      ratio         = y0[j] / scale[j];\t      yOnScale2    += ratio * ratio;\t      ratio         = yDot0[j] / scale[j];\t      yDotOnScale2 += ratio * ratio;\t    }\t\t    double h = ((yOnScale2 < 1.0e-10) || (yDotOnScale2 < 1.0e-10)) ?\t               1.0e-6 : (0.01 * Math.sqrt(yOnScale2 / yDotOnScale2));\t    if (! forward) {\t      h = -h;\t    }\t\t    // perform an Euler step using the preceding rough guess\t    for (int j = 0; j < y0.length; ++j) {\t      y1[j] = y0[j] + h * yDot0[j];\t    }\t    computeDerivatives(t0 + h, y1, yDot1);\t\t    // estimate the second derivative of the solution\t    double yDDotOnScale = 0;\t    for (int j = 0; j < y0.length; ++j) {\t      ratio         = (yDot1[j] - yDot0[j]) / scale[j];\t      yDDotOnScale += ratio * ratio;\t    }\t    yDDotOnScale = Math.sqrt(yDDotOnScale) / h;\t\t    // step size is computed such that\t    // h^order * max (||y'/tol||, ||y''/tol||) = 0.01\t    final double maxInv2 = Math.max(Math.sqrt(yDotOnScale2), yDDotOnScale);\t    final double h1 = (maxInv2 < 1.0e-15) ?\t                      Math.max(1.0e-6, 0.001 * Math.abs(h)) :\t                      Math.pow(0.01 / maxInv2, 1.0 / order);\t    h = Math.min(100.0 * Math.abs(h), h1);\t    h = Math.max(h, 1.0e-12 * Math.abs(t0));  // avoids cancellation when computing t1 - t0\t    if (h < getMinStep()) {\t      h = getMinStep();\t    }\t    if (h > getMaxStep()) {\t      h = getMaxStep();\t    }\t    if (! forward) {\t      h = -h;\t    }\t\t    return h;\t\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(4)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.addStepHandler(StepHandlerWithJacobians) is as follows.\n/** Add a step handler to this integrator.\t     * <p>The handler will be called by the integrator for each accepted\t     * step.</p>\t     * @param handler handler for the accepted steps\t     * @see #getStepHandlers()\t     * @see #clearStepHandlers()\t     */\t    public void addStepHandler(StepHandlerWithJacobians handler) {\t        final int n = ode.getDimension();\t        final int k = ode.getParametersDimension();\t        integrator.addStepHandler(new StepHandlerWrapper(handler, n, k));\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(5)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.setInitialStepSize(double) is as follows.\n/** Set the initial step size.\t   * <p>This method allows the user to specify an initial positive\t   * step size instead of letting the integrator guess it by\t   * itself. If this method is not called before integration is\t   * started, the initial step size will be estimated by the\t   * integrator.</p>\t   * @param initialStepSize initial step size to use (must be positive even\t   * for backward integration ; providing a negative value or a value\t   * outside of the min/max step interval will lead the integrator to\t   * ignore the value and compute the initial step size by itself)\t   */\t  public void setInitialStepSize(final double initialStepSize) {\t    if ((initialStepSize < minStep) || (initialStepSize > maxStep)) {\t      initialStep = -1.0;\t    } else {\t      initialStep = initialStepSize;\t    }\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(6)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.setInitialStepSize(double) is as follows.\n/** Set the initial step size.\t   * <p>This method allows the user to specify an initial positive\t   * step size instead of letting the integrator guess it by\t   * itself. If this method is not called before integration is\t   * started, the initial step size will be estimated by the\t   * integrator.</p>\t   * @param initialStepSize initial step size to use (must be positive even\t   * for backward integration ; providing a negative value or a value\t   * outside of the min/max step interval will lead the integrator to\t   * ignore the value and compute the initial step size by itself)\t   */\t  public void setInitialStepSize(final double initialStepSize) {\t    if ((initialStepSize < minStep) || (initialStepSize > maxStep)) {\t      initialStep = -1.0;\t    } else {\t      initialStep = initialStepSize;\t    }\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(7)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.sampling.DummyStepInterpolator.computeInterpolatedStateAndDerivatives(double,double) is as follows.\n/** Compute the state at the interpolated time.\t   * In this class, this method does nothing: the interpolated state\t   * is always the state at the end of the current step.\t   * @param theta normalized interpolation abscissa within the step\t   * (theta is zero at the previous time step and one at the current time step)\t   * @param oneMinusThetaH time gap between the interpolated time and\t   * the current time\t   * @throws DerivativeException this exception is propagated to the caller if the\t   * underlying user function triggers one\t   */\t  @Override\t  protected void computeInterpolatedStateAndDerivatives(final double theta, final double oneMinusThetaH)\t    throws DerivativeException {\t      System.arraycopy(currentState,      0, interpolatedState,       0, currentState.length);\t      System.arraycopy(currentDerivative, 0, interpolatedDerivatives, 0, currentDerivative.length);\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(8)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.sampling.DummyStepInterpolator.DummyStepInterpolator(double[],double[],boolean) is as follows.\n/** Simple constructor.\t   * @param y reference to the integrator array holding the state at\t   * the end of the step\t   * @param yDot reference to the integrator array holding the state\t   * derivative at some arbitrary point within the step\t   * @param forward integration direction indicator\t   */\t  public DummyStepInterpolator(final double[] y, final double[] yDot, final boolean forward) {\t    super(y, forward);\t    currentDerivative = yDot;\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(9)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.events.CombinedEventsManager.isEmpty() is as follows.\n/** Check if the manager does not manage any event handlers.\t     * @return true if manager is empty\t     */\t    public boolean isEmpty() {\t        return states.isEmpty();\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(10)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.apache.commons.math.ode.sampling.AbstractStepInterpolator.AbstractStepInterpolator(double[],boolean) is as follows.\n/** Simple constructor.\t   * @param y reference to the integrator array holding the state at\t   * the end of the step\t   * @param forward integration direction indicator\t   */\t  protected AbstractStepInterpolator(final double[] y, final boolean forward) {\t\t    previousTime      = Double.NaN;\t    currentTime       = Double.NaN;\t    h                 = Double.NaN;\t    interpolatedTime  = Double.NaN;\t\t    currentState            = y;\t    interpolatedState       = new double[y.length];\t    interpolatedDerivatives = new double[y.length];\t\t    finalized         = false;\t    this.forward      = forward;\t    this.dirtyState   = true;\t\t  }"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the available information, the top-5 most likely culprit methods for the bug are:\n\nTop_1 : org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations, double, double[], double, double)\nTop_2 : org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.initializeStep(FirstOrderDifferentialEquations, boolean, int, double[], double, double[], double[], double[])\nTop_3 : org.apache.commons.math.ode.jacobians.FirstOrderIntegratorWithJacobians.integrate(double, double[], double[][], double, double[], double[][], double[][])\nTop_4 : org.apache.commons.math.ode.nonstiff.RungeKuttaIntegrator.integrate(FirstOrderDifferentialEquations, double, double[], double, double)\nTop_5 : org.apache.commons.math.ode.nonstiff.AdaptiveStepsizeIntegrator.setInitialStepSize(double)"
+    }
+]

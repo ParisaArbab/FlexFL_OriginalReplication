@@ -1,0 +1,102 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* find_class(`class_name`) -> Find a class in the bug report by fuzzy search. `class_name` -> The name of the class. *\n* find_method(`method_name`) -> Find a method in the bug report by fuzzy search. `method_name` -> The name of the method. *\n* get_paths() -> Get the paths of the java software system. *\n* get_classes_of_path(`path_name`) -> Get the classes in the path of the java software system. `path_name` -> The accurate name of the path which can be accessed by function call `get_paths`. *\n* get_methods_of_class(`class_name`) -> Get the methods belonging to the class of the java software system. `class_name` -> The complete name of the class, for example `PathName.ClassName`. *\n* get_code_snippet_of_method(`method_name`) -> Get the code snippet of the java method. `method_name` -> The complete name of the java method, for example `PathName.ClassName.MethodName(ArgType1,ArgType2)`. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer. *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:Jsoup.isValid returns true even when htmlFragment includes tags not on whitelist\nDescription:\nCaused by Jsoup.isValid performing a destructive parse before testing for validity.  The html returned from parseBodyFragment is not what was passed in.\nAccording to documentation, html, head tags etc. should be specifically added to whitelist if they should be allowed.\nTest cases below.\npackage jsoup;\n\nimport junit.framework.Assert;\nimport org.jsoup.Jsoup;\nimport org.jsoup.nodes.Document;\nimport org.jsoup.parser.Parser;\nimport org.jsoup.safety.Cleaner;\nimport org.jsoup.safety.Whitelist;\nimport org.junit.Test;\nimport org.junit.runner.RunWith;\nimport org.junit.runners.Parameterized;\n\nimport java.util.Arrays;\nimport java.util.Collection;\n\n@RunWith(Parameterized.class)\npublic class JsoupTest\n{\n    private String htmlFragment;\n\n    public JsoupTest(String htmlFragment)\n    {\n        this.htmlFragment = htmlFragment;\n    }\n\n    @Parameterized.Parameters\n    public static Collection<String[]> dirtyHtml()\n    {\n        String[][] htmlFragments = new String[][] { {\"<html></html>\"},\n                                                    {\"<head></head>\"},\n                                                    {\"<body></body>\"}\n        };\n\n        return Arrays.asList(htmlFragments);\n    }\n\n    @Test\n    public void emptyWhitelistReturnsFalseForAllTags()\n    {\n        Assert.assertEquals(false, Jsoup.isValid(htmlFragment, new Whitelist()));\n    }\n\n    @Test\n    public void whitelistNoneReturnsFalseForAllTags()\n    {\n        Assert.assertEquals(false, Jsoup.isValid(htmlFragment, Whitelist.none()));\n    }\n\n    @Test\n    public void typicalWhitelistReturnsFalseForNonIncludedTags()\n    {\n        Whitelist whitelist = new Whitelist();\n        whitelist.addTags(\"p\");\n\n        Assert.assertEquals(false, Jsoup.isValid(htmlFragment, whitelist));\n    }\n\n    @Test\n    public void codeFromSource()\n    {\n        Document dirty = Parser.parseBodyFragment(htmlFragment, \"\");\n        Cleaner cleaner = new Cleaner(Whitelist.none());\n\n        Assert.assertEquals(false, cleaner.isValid(dirty));\n    }\n\n}\n\n\n```\nThe trigger test is as follows:\n```\npublic void testIsValidBodyHtml() {\n        String ok = \"<p>Test <b><a href='http://example.com/' rel='nofollow'>OK</a></b></p>\";\n        String ok1 = \"<p>Test <b><a href='http://example.com/'>OK</a></b></p>\"; // missing enforced is OK because still needs run thru cleaner\n        String nok1 = \"<p><script></script>Not <b>OK</b></p>\";\n        String nok2 = \"<p align=right>Test Not <b>OK</b></p>\";\n        String nok3 = \"<!-- comment --><p>Not OK</p>\"; // comments and the like will be cleaned\n        String nok4 = \"<html><head>Foo</head><body><b>OK</b></body></html>\"; // not body html\n        String nok5 = \"<p>Test <b><a href='http://example.com/' rel='nofollowme'>OK</a></b></p>\";\n        String nok6 = \"<p>Test <b><a href='http://example.com/'>OK</b></p>\"; // missing close tag\n        String nok7 = \"</div>What\";\n        assertTrue(Jsoup.isValid(ok, Whitelist.basic()));\n        assertTrue(Jsoup.isValid(ok1, Whitelist.basic()));\n        assertFalse(Jsoup.isValid(nok1, Whitelist.basic()));\n        assertFalse(Jsoup.isValid(nok2, Whitelist.basic()));\n        assertFalse(Jsoup.isValid(nok3, Whitelist.basic()));\n        assertFalse(Jsoup.isValid(nok4, Whitelist.basic()));\nThe last line shown above failed with the following stack trace.\njunit.framework.AssertionFailedError\n\tat org.jsoup.safety.CleanerTest.testIsValidBodyHtml(CleanerTest.java:160)\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the bug report and the trigger test, I can identify the following:\n\n1. The bug report states that Jsoup.isValid returns true even when the htmlFragment includes tags not on the whitelist.\n2. The trigger test shows that Jsoup.isValid fails when the htmlFragment includes tags not on the whitelist, but passes when the htmlFragment includes tags on the whitelist.\n3. The bug report mentions that Jsoup.isValid performs a destructive parse before testing for validity, which suggests that the issue might be related to the parsing process.\n\nBased on this information, I plan to locate the faulty method by:\n\n1. Identifying the classes and methods involved in the parsing process.\n2. Checking the code snippets of these methods to see if they perform any destructive parsing.\n3. Focusing on the methods that interact with the whitelist.\n\nUsing the provided functions, I will call:\n\n1. `get_paths()` to get the paths of the java software system.\n2. `get_classes_of_path()` to get the classes in each path.\n3. `find_class()` to find the class `Jsoup` and its methods.\n4. `get_methods_of_class()` to get the methods of the `Jsoup` class.\n5. `get_code_snippet_of_method()` to get the code snippet of the methods that seem suspicious.\n\nI will also use my reasoning and debugging skills to analyze the code snippets and identify the faulty method.\n\nI have 10 chances to call the functions. I will use them wisely to locate the faulty method."
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_paths()"
+    },
+    {
+        "role": "user",
+        "content": "org.jsoup\norg.jsoup.examples\norg.jsoup.helper\norg.jsoup.nodes\norg.jsoup.parser\norg.jsoup.safety\norg.jsoup.select"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_classes_of_path(org.jsoup)"
+    },
+    {
+        "role": "user",
+        "content": "Attribute\nAttributes\nAttributes.Dataset\nAttributes.Dataset.DatasetIterator\nAttributes.Dataset.EntrySet\nBooleanAttribute\nCharacterReader\nCleaner\nCleaner.CleaningVisitor\nCleaner.ElementMeta\nCollector\nCollector.Accumulator\nCombiningEvaluator\nCombiningEvaluator.And\nCombiningEvaluator.Or\nComment\nDataNode\nDataUtil\nDescendableLinkedList\nDescendableLinkedList.DescendingIterator\nDocument\nDocument.OutputSettings\nDocumentType\nElement\nElements\nEntities\nEvaluator\nEvaluator.AllElements\nEvaluator.Attribute\nEvaluator.AttributeKeyPair\nEvaluator.AttributeStarting\nEvaluator.AttributeWithValue\nEvaluator.AttributeWithValueContaining\nEvaluator.AttributeWithValueEnding\nEvaluator.AttributeWithValueMatching\nEvaluator.AttributeWithValueNot\nEvaluator.AttributeWithValueStarting\nEvaluator.Class\nEvaluator.ContainsData\nEvaluator.ContainsOwnText\nEvaluator.ContainsText\nEvaluator.CssNthEvaluator\nEvaluator.Id\nEvaluator.IndexEquals\nEvaluator.IndexEvaluator\nEvaluator.IndexGreaterThan\nEvaluator.IndexLessThan\nEvaluator.IsEmpty\nEvaluator.IsFirstChild\nEvaluator.IsFirstOfType\nEvaluator.IsLastChild\nEvaluator.IsLastOfType\nEvaluator.IsNthChild\nEvaluator.IsNthLastChild\nEvaluator.IsNthLastOfType\nEvaluator.IsNthOfType\nEvaluator.IsOnlyChild\nEvaluator.IsOnlyOfType\nEvaluator.IsRoot\nEvaluator.Matches\nEvaluator.MatchesOwn\nEvaluator.Tag\nEvaluator.TagEndsWith\nFormElement\nHtmlToPlainText\nHtmlToPlainText.FormattingVisitor\nHtmlTreeBuilder\nHttpConnection\nHttpConnection.Base\nHttpConnection.KeyVal\nHttpConnection.Request\nHttpConnection.Response\nHttpStatusException\nJsoup\nListLinks\nNode\nNode.OuterHtmlVisitor\nNodeTraversor\nParseError\nParseErrorList\nParseSettings\nParser\nQueryParser\nSelector\nSelector.SelectorParseException\nSerializationException\nStringUtil\nStructuralEvaluator.Has\nStructuralEvaluator.ImmediateParent\nStructuralEvaluator.ImmediatePreviousSibling\nStructuralEvaluator.Not\nStructuralEvaluator.Parent\nStructuralEvaluator.PreviousSibling\nStructuralEvaluator.Root\nTag\nTextNode\nToken\nToken.Character\nToken.Comment\nToken.Doctype\nToken.EOF\nToken.EndTag\nToken.StartTag\nToken.Tag\nTokenQueue\nTokeniser\nTreeBuilder\nUnsupportedMimeTypeException\nValidate\nW3CDom\nW3CDom.W3CBuilder\nWhitelist\nWhitelist.AttributeKey\nWhitelist.AttributeValue\nWhitelist.Protocol\nWhitelist.TagName\nWhitelist.TypedValue\nXmlDeclaration\nXmlTreeBuilder"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_class(Jsoup)"
+    },
+    {
+        "role": "user",
+        "content": "org.jsoup.Jsoup"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class(org.jsoup.Jsoup)"
+    },
+    {
+        "role": "user",
+        "content": "Jsoup()\nclean(String,String,Whitelist)\nclean(String,String,Whitelist,Document.OutputSettings)\nclean(String,Whitelist)\nconnect(String)\nisValid(String,Whitelist)\nparse(File,String)\nparse(File,String,String)\nparse(InputStream,String,String)\nparse(InputStream,String,String,Parser)\nparse(String)\nparse(String,String)\nparse(String,String,Parser)\nparse(URL,int)\nparseBodyFragment(String)\nparseBodyFragment(String,String)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(parseBodyFragment)"
+    },
+    {
+        "role": "user",
+        "content": "You provide a wrong method name. Please try the following method names.\norg.jsoup.Jsoup.parseBodyFragment(String,String)\norg.jsoup.Jsoup.parseBodyFragment(String)\norg.jsoup.parser.Parser.parseBodyFragment(String,String)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(org.jsoup.parser.Parser.parseBodyFragment(String,String))"
+    },
+    {
+        "role": "user",
+        "content": "/**\t     * Parse a fragment of HTML into the {@code body} of a Document.\t     *\t     * @param bodyHtml fragment of HTML\t     * @param baseUri base URI of document (i.e. original fetch location), for resolving relative URLs.\t     *\t     * @return Document, with empty head, and HTML parsed into body\t     */\t    public static Document parseBodyFragment(String bodyHtml, String baseUri) {\t        Document doc = Document.createShell(baseUri);\t        Element body = doc.body();\t        List<Node> nodeList = parseFragment(bodyHtml, body, baseUri);\t        Node[] nodes = nodeList.toArray(new Node[nodeList.size()]); // the node list gets modified when re-parented\t        for (int i = nodes.length - 1; i > 0; i--) {\t            nodes[i].remove();\t        }\t        for (Node node : nodes) {\t            body.appendChild(node);\t        }\t        return doc;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "exit()"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Top_1 : org.jsoup.parser.Parser.parseBodyFragment(String, String)\nTop_2 : org.jsoup.Jsoup.parseBodyFragment(String, String)\nTop_3 : org.jsoup.Jsoup.parseBodyFragment(String)\nTop_4 : org.jsoup.parser.Parser.parse(String, String, Parser)\nTop_5 : org.jsoup.Jsoup.parse(String, String, Parser)"
+    }
+]

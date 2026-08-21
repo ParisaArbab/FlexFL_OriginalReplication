@@ -1,0 +1,114 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* find_class(`class_name`) -> Find a class in the bug report by fuzzy search. `class_name` -> The name of the class. *\n* find_method(`method_name`) -> Find a method in the bug report by fuzzy search. `method_name` -> The name of the method. *\n* get_paths() -> Get the paths of the java software system. *\n* get_classes_of_path(`path_name`) -> Get the classes in the path of the java software system. `path_name` -> The accurate name of the path which can be accessed by function call `get_paths`. *\n* get_methods_of_class(`class_name`) -> Get the methods belonging to the class of the java software system. `class_name` -> The complete name of the class, for example `PathName.ClassName`. *\n* get_code_snippet_of_method(`method_name`) -> Get the code snippet of the java method. `method_name` -> The complete name of the java method, for example `PathName.ClassName.MethodName(ArgType1,ArgType2)`. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer. *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:Allow convenient spying on abstract classes\nDescription:\nI posted this in GoogleCode and was asked to submit in github.\nMockito is easy to use when the test needs to provide canned values for a certain method.\nBut it gets harder when a canned value isn't sufficient.\nExample 1: Fake with trivial Logic\ninterface UserAccount {\n  List<String> getEmails();\n  void addEmail(String email);\n  // 12 other methods ...\n}\n\nWhen mocking such domain entity object, it's tedious to manually program getEmails()/addEmail() with when().thenReturn() and to make sure the two methods are logically consistent, that is, getEmails() returns all emails added.\nExample 2: callback-style API\ninterface AccountService {\n  void getAccount(String id, AsyncCallback<UserAccount> callback);\n}\n\nStubbing AccountService isn't easy. It'd require use of Answer, and the Answer API isn't statically type safe:\nwhen(service.getAccount(eq(id), any(AsyncCallback.class)).thenAnswer(new Answer<Void>() {\n  AsyncCallback<UserAccount> callback = (AsyncCallback<UserAccount>) getArguments()[1];\n  ...\n});\n\nExample 3: Uninteresting parameters\ninterface AccountRpcService {\n  FutureAccount getAccount(RpcContext context, String id);\n}\n\nNone of the tests care about the context object. It's an uninteresting parameter imposed by the framework.\nIf AccountRpcService were directly mocked, all tests would have to use isA() to repetitively mention this uninteresting parameter, like this:\nwhen(service.getAccount(isA(RpcContext.class), eq(\"id\")).thenReturn(...);\nAnd all other parameters are required to be wrapped in eq().\nProposal\nI propose adding support for abstract classes to mockito to make it easier to deal with tests like above:\nFor example 1\nabstract class FakeUserAccount implements UserAccount {\n  private final List<String> emails = new ArrayList<>();\n\n  @Override public void addEmail(String email) {\n    emails.add(email);\n  }\n  @Override List<String> getEmails() {\n    return ImmutableList.copyOf(emails);\n  }\n}\n\n@Fake private FakeUserAccount userAccount; // Mockito instantiates abstract class.\n\nFor example 2\nabstract class MockAccountService implements AccountService {\n  @Override public void getAccount(String id, AsyncCallback<UserAccount> callback) {\n    callback.onSuccess(getAccount(id));\n  }\n  abstract UserAccount getAccount(String id);\n}\n\n@Fake private MockAccountService service;\n\n...\n\nwhen(service.getAccount(\"id\")).thenReturn(account);\n\nFor example 3\nabstract class MockAccountRpcService implements AccountRpcService {\n  @Override Future<Account> getAccount(RpcContext context, String id) {\n    checkNotNull(context);  // Common sanity test. Don't have to repeat it in tests.\n    return getAccount(id);\n  }\n\n  abstract Future<Account> getAccount(String id);\n}\n\n@Fake private MockAccountRpcService service;\n\nwhen(service.getAccount(\"id\")).thenReturn(...);\n\nMy work place internally implemented a default Answer to support abstract classes. We found that the support of abstract classes helps us to avoid overusing mocks when we should be using fakes. And in situations like above we get cleaner test code.\nBut because it's not integrated in the core Mockito, there are gotchas with our implementation (like, you can't have private/final methods in your fake).\nIf the idea sounds okay to give a try, I'll volunteer to submit a patch.\nThanks!\n\n```\nThe trigger test is as follows:\n```\npublic void should_spy_inner_class() throws Exception {\n    \t \n     class WithMockAndSpy {\n    \t\t@Spy private InnerStrength strength;\n    \t\t@Mock private List<String> list;\n\n            abstract class InnerStrength {\n            \tprivate final String name;\n\n            \tInnerStrength() {\n            \t\t// Make sure that @Mock fields are always injected before @Spy fields.\n            \t\tassertNotNull(list);\n            \t\t// Make sure constructor is indeed called.\n            \t\tthis.name = \"inner\";\n            \t}\n            \t\n            \tabstract String strength();\n            \t\n            \tString fullStrength() {\n            \t\treturn name + \" \" + strength();\n            \t}\n            }\n    \t}\n\t\tWithMockAndSpy outer = new WithMockAndSpy();\n        MockitoAnnotations.initMocks(outer);\n        when(outer.strength.strength()).thenReturn(\"strength\");\n        assertEquals(\"inner strength\", outer.strength.fullStrength());\nThe last line shown above failed with the following stack trace.\njunit.framework.ComparisonFailure: expected:<[inner] strength> but was:<[null] strength>\n\tat org.mockitousage.annotation.SpyAnnotationTest.should_spy_inner_class(SpyAnnotationTest.java:150)\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the bug report and the trigger test, I will plan my approach to locate the faulty method.\n\nFrom the bug report, I understand that the issue is related to mocking abstract classes in Mockito. The author of the bug report proposes adding support for abstract classes to Mockito to make it easier to deal with tests like the ones shown in the examples.\n\nThe trigger test is a test case that demonstrates the issue. The test is trying to spy on an inner class of an object, but the test fails because the `fullStrength()` method returns `null` instead of the expected value.\n\nTo locate the faulty method, I will start by analyzing the test case and identifying the relevant classes and methods. From the test case, I can see that the `WithMockAndSpy` class has an inner class `InnerStrength` that is being spied on. The `InnerStrength` class has a method `strength()` that is being mocked.\n\nMy plan is to use the `find_class` and `find_method` functions to search for classes and methods related to the `WithMockAndSpy` class and the `InnerStrength` class. I will also use the `get_code_snippet_of_method` function to retrieve the code snippet of the `strength()` method and the `fullStrength()` method to analyze their implementation.\n\nBased on the bug report and the trigger test, I suspect that the faulty method is related to the way Mockito handles abstract classes and inner classes. Therefore, I will focus on methods that are responsible for mocking and spying on these types of classes.\n\nHere is my plan:\n\n1. Use `find_class` to find the `WithMockAndSpy` class and the `InnerStrength` class.\n2. Use `find_method` to find the `strength()` method and the `fullStrength()` method.\n3. Use `get_code_snippet_of_method` to retrieve the code snippet of the `strength()` method and the `fullStrength()` method.\n4. Analyze the code snippets to identify any potential issues related to mocking and spying on abstract classes and inner classes.\n5. Use the `get_paths` function to get the paths of the Java software system and the `get_classes_of_path` function to get the classes in each path.\n6. Use the `get_methods_of_class` function to get the methods of each class and identify any methods that are related to mocking and spying on abstract classes and inner classes.\n7. Use the `get_code_snippet_of_method` function to retrieve the code snippet of each method and analyze their implementation.\n\nBy following this plan, I hope to identify the faulty method and understand the root cause of the issue."
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_class(\"WithMockAndSpy\")"
+    },
+    {
+        "role": "user",
+        "content": "Do not find `WithMockAndSpy` again because it is an invalid name. You can try the following names.\nMockKey\nMethodInfo\nMockUtil\nBDDMockito\nMockito"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_method(\"strength\")"
+    },
+    {
+        "role": "user",
+        "content": "org.mockito.Matchers.eq(T)\norg.mockito.Matchers.any()\norg.mockito.Mockito.debug()\norg.mockito.Mockito.reset(T)\norg.mockito.Mockito.when(T)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(\"WithMockAndSpy.InnerStrength.strength\")"
+    },
+    {
+        "role": "user",
+        "content": "You provide a wrong method name. Please try the following method names.\norg.mockito.Matchers.anyString()\norg.mockito.Matchers.refEq(T,String)\norg.mockito.Matchers.endsWith(String)\norg.mockito.Mockito.atMost(int)\norg.mockito.Matchers.eq(short)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(\"WithMockAndSpy.fullStrength\")"
+    },
+    {
+        "role": "user",
+        "content": "You provide a wrong method name. Please try the following method names.\norg.mockito.Mockito.when(T)\norg.mockito.Matchers.any()\norg.mockito.Matchers.eq(T)\norg.mockito.Mockito.reset(T)\norg.mockito.Mockito.only()"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_paths()"
+    },
+    {
+        "role": "user",
+        "content": "org.mockito\norg.mockito.configuration\norg.mockito.exceptions\norg.mockito.exceptions.base\norg.mockito.exceptions.misusing\norg.mockito.exceptions.verification\norg.mockito.exceptions.verification.junit\norg.mockito.internal\norg.mockito.internal.configuration\norg.mockito.internal.configuration.injection\norg.mockito.internal.configuration.injection.filter\norg.mockito.internal.configuration.injection.scanner\norg.mockito.internal.configuration.plugins\norg.mockito.internal.creation\norg.mockito.internal.creation.bytebuddy\norg.mockito.internal.creation.cglib\norg.mockito.internal.creation.instance\norg.mockito.internal.creation.settings\norg.mockito.internal.creation.util\norg.mockito.internal.debugging\norg.mockito.internal.exceptions\norg.mockito.internal.exceptions.stacktrace\norg.mockito.internal.exceptions.util\norg.mockito.internal.handler\norg.mockito.internal.invocation\norg.mockito.internal.invocation.finder\norg.mockito.internal.invocation.realmethod\norg.mockito.internal.junit\norg.mockito.internal.listeners\norg.mockito.internal.matchers\norg.mockito.internal.matchers.apachecommons\norg.mockito.internal.progress\norg.mockito.internal.reporting\norg.mockito.internal.runners\norg.mockito.internal.runners.util\norg.mockito.internal.stubbing\norg.mockito.internal.stubbing.answers\norg.mockito.internal.stubbing.defaultanswers\norg.mockito.internal.util\norg.mockito.internal.util.collections\norg.mockito.internal.util.io\norg.mockito.internal.util.junit\norg.mockito.internal.util.reflection\norg.mockito.internal.verification\norg.mockito.internal.verification.api\norg.mockito.internal.verification.argumentmatching\norg.mockito.internal.verification.checkers\norg.mockito.junit\norg.mockito.runners\norg.mockito.stubbing.answers\norg.mockito.verification"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_classes_of_path(\"org.mockito\")"
+    },
+    {
+        "role": "user",
+        "content": "AccessibilityChanger\nAcrossJVMSerializationFeature\nAcrossJVMSerializationFeature.AcrossJVMMockSerializationProxy\nAcrossJVMSerializationFeature.MockitoMockObjectInputStream\nAcrossJVMSerializationFeature.MockitoMockObjectOutputStream\nAdditionalAnswers\nAdditionalMatchers\nAfter\nAllInvocationsFinder\nAllInvocationsFinder.SequenceNumberComparator\nAnd\nAnswerReturnValuesAdapter\nAnswersValidator\nAny\nAnyVararg\nArgumentCaptor\nArgumentMatcher\nArgumentMatcherStorageImpl\nArgumentMatchingTool\nArgumentsAreDifferent\nArgumentsComparator\nArgumentsProcessor\nArrayEquals\nArrayUtils\nAtLeast\nAtLeastDiscrepancy\nAtLeastXNumberOfInvocationsChecker\nAtLeastXNumberOfInvocationsInOrderChecker\nAtMost\nBDDMockito\nBDDMockito.BDDOngoingStubbingImpl\nBDDMockito.BDDStubberImpl\nBDDMockito.ThenImpl\nBaseStubbing\nBeanPropertySetter\nByteBuddyMockMaker\nCGLIBHacker\nCachingMockBytecodeGenerator\nCachingMockBytecodeGenerator.CachedBytecodeGenerator\nCachingMockBytecodeGenerator.CachedBytecodeGenerator.MockKey\nCalls\nCallsRealMethods\nCannotStubVoidMethodWithReturnValue\nCannotVerifyStubOnlyMock\nCaptorAnnotationProcessor\nCapturingMatcher\nCglibMockMaker\nChecks\nClassImposterizer\nClassInstantiator.UsingObjenesis\nClassPathLoader\nCleanTraceRealMethod\nClonesArguments\nCollectCreatedMocks\nCompareEqual\nCompareTo\nConditionalStackTraceFilter\nConsecutiveStubbing\nConsoleMockitoLogger\nConsoleSpammingMockitoJUnitRunner\nConstructorInjection\nConstructorInjection.SimpleArgumentResolver\nConstructorInstantiator\nConstructors\nContains\nCreationSettings\nDecamelizer\nDefaultAnnotationEngine\nDefaultInjectionEngine\nDefaultMockingDetails\nDefaultMockitoConfiguration\nDefaultPluginSwitch\nDefaultRealMethod\nDefaultRegisteredInvocations\nDefaultRegisteredInvocations.RemoveToString\nDefaultStackTraceCleaner\nDefaultStackTraceCleanerProvider\nDelegatingMethod\nDelegatingMockitoMethodProxy\nDiscrepancy\nDoesNothing\nEndsWith\nEquality\nEquals\nEqualsBuilder\nEqualsWithDelta\nExceptionIncludingMockitoWarnings\nFieldCopier\nFieldInitializationReport\nFieldInitializer\nFieldInitializer.NoArgConstructorInstantiator\nFieldInitializer.ParameterizedConstructorInstantiator\nFieldReader\nFieldSetter\nFields\nFields.InstanceFields\nFinalMockCandidateFilter\nFind\nForwardsInvocations\nFrameworkUsageValidator\nFriendlyExceptionMaker\nFriendlyReminderException\nGenericMaster\nGenericMetadataSupport\nGenericMetadataSupport.FromClassGenericMetadataSupport\nGenericMetadataSupport.FromParameterizedTypeGenericMetadataSupport\nGenericMetadataSupport.NotGenericReturnTypeSupport\nGenericMetadataSupport.ParameterizedReturnType\nGenericMetadataSupport.TypeVarBoundedType\nGenericMetadataSupport.TypeVariableReturnType\nGenericMetadataSupport.WildCardBoundedType\nGlobalConfiguration\nGloballyConfiguredAnswer\nGreaterOrEqual\nGreaterThan\nHandyReturnValues\nHashCodeAndEqualsMockWrapper\nHashCodeAndEqualsSafeSet\nIOUtil\nIdentitySet\nInOrderContextImpl\nInOrderImpl\nInOrderWrapper\nInjectMocksScanner\nInjectingAnnotationEngine\nInstanceField\nInstanceOf\nInstantiationException\nInstantiatorProvider\nInterceptedInvocation\nInterceptedInvocation.FromCallable\nInvalidUseOfMatchersException\nInvocationContainerImpl\nInvocationImpl\nInvocationMarker\nInvocationMatcher\nInvocationNotifierHandler\nInvocationsFinder\nInvocationsFinder.RemoveNotMatching\nInvocationsFinder.RemoveUnverifiedInOrder\nIterables\nJUnit44RunnerImpl\nJUnit45AndHigherRunnerImpl\nJUnitDetecter\nJUnitFailureHacker\nJUnitRule\nJUnitTool\nLenientCopyTool\nLessOrEqual\nLessThan\nListUtil\nLocalized\nLocalizedMatcher\nLocationImpl\nLoggingListener\nMatchers\nMatchersBinder\nMatchersPrinter\nMatches\nMethodInfo\nMethodInterceptorFilter\nMissingInvocationChecker\nMissingInvocationInOrderChecker\nMissingMethodInvocationException\nMockAnnotationProcessor\nMockAwareVerificationMode\nMockBytecodeGenerator\nMockCreationValidator\nMockHandlerFactory\nMockHandlerImpl\nMockInjection\nMockInjection.OngoingMockInjection\nMockInjectionStrategy\nMockMethodInterceptor\nMockMethodInterceptor.ForEquals\nMockMethodInterceptor.ForHashCode\nMockMethodInterceptor.ForWriteReplace\nMockNameImpl\nMockScanner\nMockSettingsImpl\nMockUtil\nMockingProgressImpl\nMockito\nMockitoAnnotations\nMockitoAnnotationsMockAnnotationProcessor\nMockitoAssertionError\nMockitoConfigurationException\nMockitoCore\nMockitoDebuggerImpl\nMockitoException\nMockitoJUnit\nMockitoJUnit44Runner\nMockitoJUnitRule\nMockitoJUnitRunner\nMockitoNamingPolicy\nMockitoSerializationIssue\nNameBasedCandidateFilter\nNeverWantedButInvoked\nNoInteractionsWanted\nNoMoreInteractions\nNonGreedyNumberOfInvocationsInOrderChecker\nNot\nNotAMockException\nNotNull\nNotifiedMethodInvocationReport\nNull\nNullInsteadOfMockException\nNullResultGuardian\nNumberOfInvocationsChecker\nNumberOfInvocationsInOrderChecker\nObjectMethodsGuru\nObjenesisInstantiator\nOngoingStubbingImpl\nOnly\nOr\nPluginFileReader\nPluginFinder\nPluginLoader\nPluginRegistry\nPlugins\nPluralizer\nPrimitives\nPrintSettings\nPropertyAndSetterInjection\nPropertyAndSetterInjection.FieldTypeAndNameComparator\nReflectionEquals\nRemoveFirstLine\nReporter\nReturns\nReturnsArgumentAt\nReturnsDeepStubs\nReturnsDeepStubs.DeeplyStubbedAnswer\nReturnsDeepStubs.ReturnsDeepStubsSerializationFallback\nReturnsElementsOf\nReturnsEmptyValues\nReturnsMocks\nReturnsMoreEmptyValues\nReturnsSmartNulls\nReturnsSmartNulls.ThrowsSmartNullPointer\nRunnerFactory\nRunnerProvider\nSame\nScenarioPrinter\nSearchingClassLoader\nSequenceNumber\nSerializableMethod\nSerializableMockitoMethodProxy\nSets\nSimpleMockitoLogger\nSingleRegisteredInvocation\nSmartNullPointerException\nSmartPrinter\nSpyAnnotationEngine\nSpyOnInjectedFieldsHandler\nStackTraceFilter\nStartsWith\nStringJoiner\nStubInfoImpl\nStubbedInvocationMatcher\nStubberImpl\nTestMethodsFinder\nThreadSafeMockingProgress\nThrowsException\nThrowsExceptionClass\nTimeout\nTimer\nTimes\nTooLittleActualInvocations\nTooManyActualInvocations\nTypeBasedCandidateFilter\nUnfinishedStubbingException\nUnfinishedVerificationException\nUnusedStubsFinder\nVarargCapturingMatcher\nVerboseMockInvocationLogger\nVerboseMockitoJUnitRunner\nVerifiableInvocationsFinder\nVerifiableInvocationsFinder.RemoveIgnoredForVerification\nVerificationDataImpl\nVerificationDataInOrderImpl\nVerificationInOrderFailure\nVerificationModeFactory\nVerificationOverTimeImpl\nVerificationWrapper\nVoidMethodStubbableImpl\nWantedButNotInvoked\nWarningsCollector\nWarningsFinder\nWarningsPrinterImpl\nWhitebox\nWrongTypeOfReturnValue"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class(\"org.mockito.Mockito\")"
+    },
+    {
+        "role": "user",
+        "content": "after(long)\natLeast(int)\natLeastOnce()\natMost(int)\ncalls(int)\ndebug()\ndoAnswer(Answer)\ndoCallRealMethod()\ndoNothing()\ndoReturn(Object)\ndoThrow(Class<? extends Throwable>)\ndoThrow(Throwable)\nignoreStubs(Object)\ninOrder(Object)\nmock(Class<T>)\nmock(Class<T>,Answer)\nmock(Class<T>,MockSettings)\nmock(Class<T>,ReturnValues)\nmock(Class<T>,String)\nmockingDetails(Object)\nnever()\nonly()\nreset(T)\nspy(Class<T>)\nspy(T)\nstub(T)\nstubVoid(T)\ntimeout(long)\ntimes(int)\nvalidateMockitoUsage()\nverify(T)\nverify(T,VerificationMode)\nverifyNoMoreInteractions(Object)\nverifyZeroInteractions(Object)\nwhen(T)\nwithSettings()"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "exit()"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the information provided, here are the top-5 most likely culprit methods for the bug:\n\nTop_1 : org.mockito.Mockito.when(ArgumentMatcher)\nTop_2 : org.mockito.Mockito.reset(T)\nTop_3 : org.mockito.Mockito.spy(Class<T>)\nTop_4 : org.mockito.Mockito.mock(Class<T>, Answer)\nTop_5 : org.mockito.Mockito.verify(T)\n\nPlease note that these are just suggestions based on the information provided and may not be the actual root cause of the bug."
+    }
+]

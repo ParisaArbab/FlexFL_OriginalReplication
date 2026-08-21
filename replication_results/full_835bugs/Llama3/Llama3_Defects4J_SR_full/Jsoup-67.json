@@ -1,0 +1,90 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* find_class(`class_name`) -> Find a class in the bug report by fuzzy search. `class_name` -> The name of the class. *\n* find_method(`method_name`) -> Find a method in the bug report by fuzzy search. `method_name` -> The name of the method. *\n* get_paths() -> Get the paths of the java software system. *\n* get_classes_of_path(`path_name`) -> Get the classes in the path of the java software system. `path_name` -> The accurate name of the path which can be accessed by function call `get_paths`. *\n* get_methods_of_class(`class_name`) -> Get the methods belonging to the class of the java software system. `class_name` -> The complete name of the class, for example `PathName.ClassName`. *\n* get_code_snippet_of_method(`method_name`) -> Get the code snippet of the java method. `method_name` -> The complete name of the java method, for example `PathName.ClassName.MethodName(ArgType1,ArgType2)`. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer. *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:Quadratic behaviour on deeply nested pages\nDescription:\nOn pages with very deep sequence of elements (like this one sv.stargate.wikia.com/wiki/M2J), Jsoup gets very slow and spends too much time in this function:\nhttps://github.com/jhy/jsoup/blob/master/src/main/java/org/jsoup/parser/HtmlTreeBuilder.java#L462\nIs there any way to remove this quadratic behaviour? Either by using better data structures or by having option to limit stack size (and throw exception when it is too deep).\n\n```\nThe trigger test is as follows:\n```\npublic void handlesDeepStack() {\n        // inspired by http://sv.stargate.wikia.com/wiki/M2J and https://github.com/jhy/jsoup/issues/955\n        // I didn't put it in the integration tests, because explorer and intellij kept dieing trying to preview/index it\n\n        // Arrange\n        StringBuilder longBody = new StringBuilder(500000);\n        for (int i = 0; i < 25000; i++) {\n            longBody.append(i).append(\"<dl><dd>\");\n        }\n        for (int i = 0; i < 25000; i++) {\n            longBody.append(i).append(\"</dd></dl>\");\n        }\n\n        // Act\n        long start = System.currentTimeMillis();\n        Document doc = Parser.parseBodyFragment(longBody.toString(), \"\");\n\n        // Assert\n        assertEquals(2, doc.body().childNodeSize());\n        assertEquals(25000, doc.select(\"dd\").size());\n        assertTrue(System.currentTimeMillis() - start < 1000);\nThe last line shown above failed with the following stack trace.\njunit.framework.AssertionFailedError\n\tat org.jsoup.parser.HtmlParserTest.handlesDeepStack(HtmlParserTest.java:924)\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the bug report and the trigger test, I can start by identifying the key points:\n\n1. The bug report mentions a quadratic behavior in the `HtmlTreeBuilder` class, specifically in the `#L462` line.\n2. The trigger test is a test case that creates a deeply nested HTML structure and measures the time it takes to parse it using the `Parser.parseBodyFragment` method.\n3. The test case fails because the parsing takes too long, indicating that the quadratic behavior is causing a performance issue.\n\nTo locate the faulty method, I'll start by identifying the classes and methods involved in the parsing process. I'll use the `get_paths()` function to get the paths of the Java software system, and then use `get_classes_of_path()` to get the classes in each path. I'll also use `find_class()` and `find_method()` to find the classes and methods mentioned in the bug report.\n\nHere's my plan:\n\n1. Get the paths of the Java software system using `get_paths()`.\n2. Identify the classes in each path using `get_classes_of_path()`.\n3. Find the `HtmlTreeBuilder` class using `find_class(\"HtmlTreeBuilder\")`.\n4. Get the methods of the `HtmlTreeBuilder` class using `get_methods_of_class(\"org.jsoup.parser.HtmlTreeBuilder\")`.\n5. Check if any of the methods in step 4 match the line number mentioned in the bug report (`#L462`).\n6. If I find a matching method, I'll use `get_code_snippet_of_method()` to get the code snippet of that method.\n7. Analyze the code snippet to identify potential issues that could cause the quadratic behavior.\n8. If I don't find a matching method, I'll repeat steps 3-7 for other classes and methods involved in the parsing process.\n\nI'll use my 10 function calls to execute this plan. Let's start!"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_paths()"
+    },
+    {
+        "role": "user",
+        "content": "org.jsoup\norg.jsoup.examples\norg.jsoup.helper\norg.jsoup.internal\norg.jsoup.nodes\norg.jsoup.parser\norg.jsoup.safety\norg.jsoup.select"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_classes_of_path(org.jsoup.parser)"
+    },
+    {
+        "role": "user",
+        "content": "CharacterReader\nHtmlTreeBuilder\nParseError\nParseErrorList\nParseSettings\nParser\nTag\nToken\nToken.Character\nToken.Comment\nToken.Doctype\nToken.EOF\nToken.EndTag\nToken.StartTag\nToken.Tag\nTokenQueue\nTokeniser\nTreeBuilder\nXmlTreeBuilder"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_class(\"HtmlTreeBuilder\")"
+    },
+    {
+        "role": "user",
+        "content": "org.jsoup.parser.HtmlTreeBuilder"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class(\"org.jsoup.parser.HtmlTreeBuilder\")"
+    },
+    {
+        "role": "user",
+        "content": "HtmlTreeBuilder()\naboveOnStack(Element)\nclearFormattingElementsToLastMarker()\nclearStackToContext(String)\nclearStackToTableBodyContext()\nclearStackToTableContext()\nclearStackToTableRowContext()\ndefaultSettings()\nerror(HtmlTreeBuilderState)\nframesetOk()\nframesetOk(boolean)\ngenerateImpliedEndTags()\ngenerateImpliedEndTags(String)\ngetActiveFormattingElement(String)\ngetBaseUri()\ngetDocument()\ngetFormElement()\ngetFromStack(String)\ngetHeadElement()\ngetPendingTableCharacters()\ngetStack()\ninButtonScope(String)\ninListItemScope(String)\ninScope(String)\ninScope(String,String[])\ninScope(String[])\ninSelectScope(String)\ninSpecificScope(String,String[],String[])\ninSpecificScope(String[],String[],String[])\ninTableScope(String)\ninitialiseParse(Reader,String,ParseErrorList,ParseSettings)\ninsert(Element)\ninsert(Token.Character)\ninsert(Token.Comment)\ninsert(Token.StartTag)\ninsertEmpty(Token.StartTag)\ninsertForm(Token.StartTag,boolean)\ninsertInFosterParent(Node)\ninsertMarkerToFormattingElements()\ninsertNode(Node)\ninsertOnStackAfter(Element,Element)\ninsertStartTag(String)\nisElementInQueue(ArrayList<Element>,Element)\nisFosterInserts()\nisFragmentParsing()\nisInActiveFormattingElements(Element)\nisSameFormattingElement(Element,Element)\nisSpecial(Element)\nlastFormattingElement()\nmarkInsertionMode()\nmaybeSetBaseUri(Element)\nnewPendingTableCharacters()\nonStack(Element)\noriginalState()\nparseFragment(String,Element,String,ParseErrorList,ParseSettings)\npop()\npopStackToBefore(String)\npopStackToClose(String)\nprocess(Token)\nprocess(Token,HtmlTreeBuilderState)\npush(Element)\npushActiveFormattingElements(Element)\nreconstructFormattingElements()\nremoveFromActiveFormattingElements(Element)\nremoveFromStack(Element)\nremoveLastFormattingElement()\nreplaceActiveFormattingElement(Element,Element)\nreplaceInQueue(ArrayList<Element>,Element,Element)\nreplaceOnStack(Element,Element)\nresetInsertionMode()\nsetFormElement(FormElement)\nsetFosterInserts(boolean)\nsetHeadElement(Element)\nsetPendingTableCharacters(List<String>)\nstate()\ntoString()\ntransition(HtmlTreeBuilderState)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(\"org.jsoup.parser.HtmlTreeBuilder.parseFragment\")"
+    },
+    {
+        "role": "user",
+        "content": "Do you mean `org.jsoup.parser.HtmlTreeBuilder.parseFragment(String,Element,String,ParseErrorList,ParseSettings)`? Its code snippet is as follows.\nList<Node> parseFragment(String inputFragment, Element context, String baseUri, ParseErrorList errors, ParseSettings settings) {\t        // context may be null\t        state = HtmlTreeBuilderState.Initial;\t        initialiseParse(new StringReader(inputFragment), baseUri, errors, settings);\t        contextElement = context;\t        fragmentParsing = true;\t        Element root = null;\t\t        if (context != null) {\t            if (context.ownerDocument() != null) // quirks setup:\t                doc.quirksMode(context.ownerDocument().quirksMode());\t\t            // initialise the tokeniser state:\t            String contextTag = context.tagName();\t            if (StringUtil.in(contextTag, \"title\", \"textarea\"))\t                tokeniser.transition(TokeniserState.Rcdata);\t            else if (StringUtil.in(contextTag, \"iframe\", \"noembed\", \"noframes\", \"style\", \"xmp\"))\t                tokeniser.transition(TokeniserState.Rawtext);\t            else if (contextTag.equals(\"script\"))\t                tokeniser.transition(TokeniserState.ScriptData);\t            else if (contextTag.equals((\"noscript\")))\t                tokeniser.transition(TokeniserState.Data); // if scripting enabled, rawtext\t            else if (contextTag.equals(\"plaintext\"))\t                tokeniser.transition(TokeniserState.Data);\t            else\t                tokeniser.transition(TokeniserState.Data); // default\t\t            root = new Element(Tag.valueOf(\"html\", settings), baseUri);\t            doc.appendChild(root);\t            stack.add(root);\t            resetInsertionMode();\t\t            // setup form element to nearest form on context (up ancestor chain). ensures form controls are associated\t            // with form correctly\t            Elements contextChain = context.parents();\t            contextChain.add(0, context);\t            for (Element parent: contextChain) {\t                if (parent instanceof FormElement) {\t                    formElement = (FormElement) parent;\t                    break;\t                }\t            }\t        }\t\t        runParser();\t        if (context != null)\t            return root.childNodes();\t        else\t            return doc.childNodes();\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "exit()"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Top_1 : org.jsoup.parser.HtmlTreeBuilder.parseFragment(String, Element, String, ParseErrorList, ParseSettings)\nTop_2 : org.jsoup.parser.HtmlTreeBuilder.runParser()\nTop_3 : org.jsoup.parser.HtmlTreeBuilder.initialiseParse(Reader, String, ParseErrorList, ParseSettings)\nTop_4 : org.jsoup.parser.HtmlTreeBuilder.resetInsertionMode()\nTop_5 : org.jsoup.parser.HtmlTreeBuilder.transition(HtmlTreeBuilderState)"
+    }
+]
