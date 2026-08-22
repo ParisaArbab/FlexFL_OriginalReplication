@@ -1,0 +1,126 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* find_class(`class_name`) -> Find a class in the bug report by fuzzy search. `class_name` -> The name of the class. *\n* find_method(`method_name`) -> Find a method in the bug report by fuzzy search. `method_name` -> The name of the method. *\n* get_paths() -> Get the paths of the java software system. *\n* get_classes_of_path(`path_name`) -> Get the classes in the path of the java software system. `path_name` -> The accurate name of the path which can be accessed by function call `get_paths`. *\n* get_methods_of_class(`class_name`) -> Get the methods belonging to the class of the java software system. `class_name` -> The complete name of the class, for example `PathName.ClassName`. *\n* get_code_snippet_of_method(`method_name`) -> Get the code snippet of the java method. `method_name` -> The complete name of the java method, for example `PathName.ClassName.MethodName(ArgType1,ArgType2)`. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer. *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:<code>OutOfMemoryError</code> when writing BigDecimal\nDescription:\n(note: moved from FasterXML/jackson-databind#1316 reported by @gmethvin)\nWhen I've enabled the WRITE_BIGDECIMAL_AS_PLAIN setting on Jackson 2.7.5, Jackson will attempt to write out the whole number, no matter how large the exponent.\nFor example, the following code:\nObjectMapper mapper = new ObjectMapper().enable(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN);\nmapper.writeValueAsString(new java.math.BigDecimal(\"9.223372E+1010671858\"));\ntriggers the exception:\njava.lang.OutOfMemoryError: Java heap space\n  at java.lang.AbstractStringBuilder.<init>(AbstractStringBuilder.java:68)\n  at java.lang.StringBuilder.<init>(StringBuilder.java:101)\n  at java.math.BigDecimal.toPlainString(BigDecimal.java:2964)\n  at com.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(WriterBasedJsonGenerator.java:690)\n  at com.fasterxml.jackson.databind.ser.std.NumberSerializer.serialize(NumberSerializer.java:45)\n  at com.fasterxml.jackson.databind.ser.std.NumberSerializer.serialize(NumberSerializer.java:19)\n  at com.fasterxml.jackson.databind.ser.DefaultSerializerProvider.serializeValue(DefaultSerializerProvider.java:130)\n  at com.fasterxml.jackson.databind.ObjectMapper._configAndWriteValue(ObjectMapper.java:3612)\n  at com.fasterxml.jackson.databind.ObjectMapper.writeValueAsString(ObjectMapper.java:2980)\n  ... 23 elided\n\nI know technically Jackson is doing what you're telling it to do (so if you don't feel this is an issue feel free to close it). But it would be nice if WRITE_BIGDECIMAL_AS_PLAIN set a reasonable length on the number, so as not to leave users open to denial of service vulnerabilities.\n(Actually, I think this might technically be an issue in jackson-core; let me know if I should resubmit.)\n\n```\nThe trigger test is as follows:\n```\npublic void testTooBigBigDecimal() throws Exception\n    {\n        JsonFactory f = new JsonFactory();\n        f.enable(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN);\n\n        // 24-Aug-2016, tatu: Initial check limits scale to [-9999,+9999]\n        BigDecimal BIG = new BigDecimal(\"1E+9999\");\n        BigDecimal TOO_BIG = new BigDecimal(\"1E+10000\");\n        BigDecimal SMALL = new BigDecimal(\"1E-9999\");\n        BigDecimal TOO_SMALL = new BigDecimal(\"1E-10000\");\n\n        for (boolean useBytes : new boolean[] { false, true } ) {\n            for (boolean asString : new boolean[] { false, true } ) {\n                JsonGenerator g;\n                \n                if (useBytes) {\n                    g = f.createGenerator(new ByteArrayOutputStream());\n                } else {\n                    g = f.createGenerator(new StringWriter());\n                }\n                if (asString) {\n                    g.enable(JsonGenerator.Feature.WRITE_NUMBERS_AS_STRINGS);\n                }\n\n                // first, ok cases:\n                g.writeStartArray();\n                g.writeNumber(BIG);\n                g.writeNumber(SMALL);\n                g.writeEndArray();\n                g.close();\n\n                // then invalid\n                for (BigDecimal input : new BigDecimal[] { TOO_BIG, TOO_SMALL }) {\n                    if (useBytes) {\n                        g = f.createGenerator(new ByteArrayOutputStream());\n                    } else {\n                        g = f.createGenerator(new StringWriter());\n                    }\n                    if (asString) {\n                        g.enable(JsonGenerator.Feature.WRITE_NUMBERS_AS_STRINGS);\n                    }\n                    try {\n                        g.writeNumber(input);\n                        fail(\"Should not have written without exception: \"+input);\nThe last line shown above failed with the following stack trace.\njunit.framework.AssertionFailedError: Should not have written without exception: 1E+10000\n\tat com.fasterxml.jackson.core.json.TestJsonGeneratorFeatures.testTooBigBigDecimal(TestJsonGeneratorFeatures.java:154)\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "To locate the faulty methods, we need to follow these steps:\n\n1. Identify the problematic feature: The issue seems to be related to the `WRITE_BIGDECIMAL_AS_PLAIN` feature in Jackson 2.7.5.\n\n2. Find the class that contains the `WRITE_BIGDECIMAL_AS_PLAIN` feature: We can use the `find_class` function to find the class containing this feature.\n\n3. Find the methods related to handling big decimals: Once we have the class, we can look for methods related to handling big decimals or the `WRITE_BIGDECIMAL_AS_PLAIN` feature.\n\n4. Check the trigger test: The trigger test provides insights into the specific scenario causing the issue. It involves creating a generator with the `WRITE_BIGDECIMAL_AS_PLAIN` feature enabled and attempting to write large or small values.\n\n5. Analyze the stack trace: The stack trace from the trigger test can help us pinpoint the exact method where the issue occurs.\n\nLet's start by finding the class containing the `WRITE_BIGDECIMAL_AS_PLAIN` feature.\n\nFunction call:\n```python\nfind_class('JsonGenerator')\n```"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_class('JsonGenerator')"
+    },
+    {
+        "role": "user",
+        "content": "com.fasterxml.jackson.core.JsonGenerator"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_method('WRITE_BIGDECIMAL_AS_PLAIN')"
+    },
+    {
+        "role": "user",
+        "content": "com.fasterxml.jackson.core.sym.Name.getName()\ncom.fasterxml.jackson.core.Version.toString()\ncom.fasterxml.jackson.core.JsonPointer.tail()\ncom.fasterxml.jackson.core.JsonPointer.head()\ncom.fasterxml.jackson.core.JsonPointer.last()"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_method('writeNumber')"
+    },
+    {
+        "role": "user",
+        "content": "com.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(float)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(long)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(long)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(double)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(short)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(double)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(short)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(String)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(double)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(String)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(double)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(int)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(long)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(float)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(float)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(float)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(String)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(short)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(int)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(short)\ncom.fasterxml.jackson.core.JsonGenerator.writeNumber(short)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(int)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(long)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(int)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(String)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_method('writeNumber')"
+    },
+    {
+        "role": "user",
+        "content": "com.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(float)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(long)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(long)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(double)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(short)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(double)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(short)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(String)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(double)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(String)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(BigInteger)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(double)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(int)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(long)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(float)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(float)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(float)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(String)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(short)\ncom.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(int)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(short)\ncom.fasterxml.jackson.core.JsonGenerator.writeNumber(short)\ncom.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(int)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(BigDecimal)\ncom.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(long)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(int)\ncom.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(String)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class('com.fasterxml.jackson.core.json.UTF8JsonGenerator')"
+    },
+    {
+        "role": "user",
+        "content": "UTF8JsonGenerator(IOContext,int,ObjectCodec,OutputStream)\nUTF8JsonGenerator(IOContext,int,ObjectCodec,OutputStream,byte[],int,boolean)\n_flushBuffer()\n_handleLongCustomEscape(byte[],int,int,byte[],int)\n_outputMultiByteChar(int,int)\n_outputRawMultiByteChar(int,char[],int,int)\n_outputSurrogates(int,int)\n_readMore(InputStream,byte[],int,int,int)\n_releaseBuffers()\n_verifyPrettyValueWrite(String,int)\n_verifyValueWrite(String)\n_writeBinary(Base64Variant,InputStream,byte[])\n_writeBinary(Base64Variant,InputStream,byte[],int)\n_writeBinary(Base64Variant,byte[],int,int)\n_writeBytes(byte[])\n_writeBytes(byte[],int,int)\n_writeCustomEscape(byte[],int,SerializableString,int)\n_writeCustomStringSegment2(String,int,int)\n_writeCustomStringSegment2(char[],int,int)\n_writeGenericEscape(int,int)\n_writeNull()\n_writePPFieldName(SerializableString)\n_writePPFieldName(String)\n_writeQuotedInt(int)\n_writeQuotedLong(long)\n_writeQuotedRaw(String)\n_writeQuotedShort(short)\n_writeRawSegment(char[],int,int)\n_writeSegmentedRaw(char[],int,int)\n_writeStringSegment(String,int,int)\n_writeStringSegment(char[],int,int)\n_writeStringSegment2(String,int,int)\n_writeStringSegment2(char[],int,int)\n_writeStringSegmentASCII2(String,int,int)\n_writeStringSegmentASCII2(char[],int,int)\n_writeStringSegments(String,boolean)\n_writeStringSegments(String,int,int)\n_writeStringSegments(char[],int,int)\n_writeUTF8Segment(byte[],int,int)\n_writeUTF8Segment2(byte[],int,int)\n_writeUTF8Segments(byte[],int,int)\n_writeUnq(SerializableString)\nclose()\nflush()\ngetOutputBuffered()\ngetOutputTarget()\nwriteBinary(Base64Variant,InputStream,int)\nwriteBinary(Base64Variant,byte[],int,int)\nwriteBoolean(boolean)\nwriteEndArray()\nwriteEndObject()\nwriteFieldName(SerializableString)\nwriteFieldName(String)\nwriteNull()\nwriteNumber(BigDecimal)\nwriteNumber(BigInteger)\nwriteNumber(String)\nwriteNumber(double)\nwriteNumber(float)\nwriteNumber(int)\nwriteNumber(long)\nwriteNumber(short)\nwriteRaw(SerializableString)\nwriteRaw(String)\nwriteRaw(String,int,int)\nwriteRaw(char)\nwriteRaw(char[],int,int)\nwriteRawUTF8String(byte[],int,int)\nwriteRawValue(SerializableString)\nwriteStartArray()\nwriteStartObject()\nwriteString(SerializableString)\nwriteString(String)\nwriteString(char[],int,int)\nwriteUTF8String(byte[],int,int)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class('com.fasterxml.jackson.core.json.WriterBasedJsonGenerator')"
+    },
+    {
+        "role": "user",
+        "content": "WriterBasedJsonGenerator(IOContext,int,ObjectCodec,Writer)\n_allocateEntityBuffer()\n_appendCharacterEscape(char,int)\n_flushBuffer()\n_prependOrWriteCharacterEscape(char,int)\n_prependOrWriteCharacterEscape(char[],int,int,char,int)\n_readMore(InputStream,byte[],int,int,int)\n_releaseBuffers()\n_verifyPrettyValueWrite(String)\n_verifyValueWrite(String)\n_writeBinary(Base64Variant,InputStream,byte[])\n_writeBinary(Base64Variant,InputStream,byte[],int)\n_writeBinary(Base64Variant,byte[],int,int)\n_writeFieldName(SerializableString,boolean)\n_writeFieldName(String,boolean)\n_writeLongString(String)\n_writeNull()\n_writePPFieldName(SerializableString,boolean)\n_writePPFieldName(String,boolean)\n_writeQuotedInt(int)\n_writeQuotedLong(long)\n_writeQuotedRaw(String)\n_writeQuotedShort(short)\n_writeSegment(int)\n_writeSegmentASCII(int,int)\n_writeSegmentCustom(int)\n_writeString(String)\n_writeString(char[],int,int)\n_writeString2(int)\n_writeStringASCII(char[],int,int,int)\n_writeStringASCII(int,int)\n_writeStringCustom(char[],int,int)\n_writeStringCustom(int)\nclose()\nflush()\ngetOutputBuffered()\ngetOutputTarget()\nwriteBinary(Base64Variant,InputStream,int)\nwriteBinary(Base64Variant,byte[],int,int)\nwriteBoolean(boolean)\nwriteEndArray()\nwriteEndObject()\nwriteFieldName(SerializableString)\nwriteFieldName(String)\nwriteNull()\nwriteNumber(BigDecimal)\nwriteNumber(BigInteger)\nwriteNumber(String)\nwriteNumber(double)\nwriteNumber(float)\nwriteNumber(int)\nwriteNumber(long)\nwriteNumber(short)\nwriteRaw(SerializableString)\nwriteRaw(String)\nwriteRaw(String,int,int)\nwriteRaw(char)\nwriteRaw(char[],int,int)\nwriteRawLong(String)\nwriteRawUTF8String(byte[],int,int)\nwriteStartArray()\nwriteStartObject()\nwriteString(SerializableString)\nwriteString(String)\nwriteString(char[],int,int)\nwriteUTF8String(byte[],int,int)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class('com.fasterxml.jackson.core.util.JsonGeneratorDelegate')"
+    },
+    {
+        "role": "user",
+        "content": "JsonGeneratorDelegate(JsonGenerator)\nJsonGeneratorDelegate(JsonGenerator,boolean)\ncanOmitFields()\ncanUseSchema(FormatSchema)\ncanWriteBinaryNatively()\ncanWriteObjectId()\ncanWriteTypeId()\nclose()\ncopyCurrentEvent(JsonParser)\ncopyCurrentStructure(JsonParser)\ndisable(Feature)\nenable(Feature)\nflush()\ngetCharacterEscapes()\ngetCodec()\ngetCurrentValue()\ngetDelegate()\ngetFeatureMask()\ngetHighestEscapedChar()\ngetOutputBuffered()\ngetOutputContext()\ngetOutputTarget()\ngetPrettyPrinter()\ngetSchema()\nisClosed()\nisEnabled(Feature)\noverrideFormatFeatures(int,int)\noverrideStdFeatures(int,int)\nsetCharacterEscapes(CharacterEscapes)\nsetCodec(ObjectCodec)\nsetCurrentValue(Object)\nsetFeatureMask(int)\nsetHighestNonEscapedChar(int)\nsetPrettyPrinter(PrettyPrinter)\nsetRootValueSeparator(SerializableString)\nsetSchema(FormatSchema)\nuseDefaultPrettyPrinter()\nversion()\nwriteBinary(Base64Variant,InputStream,int)\nwriteBinary(Base64Variant,byte[],int,int)\nwriteBoolean(boolean)\nwriteEndArray()\nwriteEndObject()\nwriteFieldName(SerializableString)\nwriteFieldName(String)\nwriteNull()\nwriteNumber(BigDecimal)\nwriteNumber(BigInteger)\nwriteNumber(String)\nwriteNumber(double)\nwriteNumber(float)\nwriteNumber(int)\nwriteNumber(long)\nwriteNumber(short)\nwriteObject(Object)\nwriteObjectId(Object)\nwriteObjectRef(Object)\nwriteOmittedField(String)\nwriteRaw(SerializableString)\nwriteRaw(String)\nwriteRaw(String,int,int)\nwriteRaw(char)\nwriteRaw(char[],int,int)\nwriteRawUTF8String(byte[],int,int)\nwriteRawValue(String)\nwriteRawValue(String,int,int)\nwriteRawValue(char[],int,int)\nwriteStartArray()\nwriteStartArray(int)\nwriteStartObject()\nwriteString(SerializableString)\nwriteString(String)\nwriteString(char[],int,int)\nwriteTree(TreeNode)\nwriteTypeId(Object)\nwriteUTF8String(byte[],int,int)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_methods_of_class('com.fasterxml.jackson.core.filter.FilteringGeneratorDelegate')"
+    },
+    {
+        "role": "user",
+        "content": "FilteringGeneratorDelegate(JsonGenerator,TokenFilter,boolean,boolean)\n_checkBinaryWrite()\n_checkParentPath()\n_checkPropertyParentPath()\n_checkRawValueWrite()\ngetFilter()\ngetFilterContext()\ngetMatchCount()\ngetOutputContext()\nwriteBinary(Base64Variant,InputStream,int)\nwriteBinary(Base64Variant,byte[],int,int)\nwriteBoolean(boolean)\nwriteEndArray()\nwriteEndObject()\nwriteFieldName(SerializableString)\nwriteFieldName(String)\nwriteNull()\nwriteNumber(BigDecimal)\nwriteNumber(BigInteger)\nwriteNumber(String)\nwriteNumber(double)\nwriteNumber(float)\nwriteNumber(int)\nwriteNumber(long)\nwriteNumber(short)\nwriteObjectId(Object)\nwriteObjectRef(Object)\nwriteOmittedField(String)\nwriteRaw(SerializableString)\nwriteRaw(String)\nwriteRaw(String,int,int)\nwriteRaw(char)\nwriteRaw(char[],int,int)\nwriteRawUTF8String(byte[],int,int)\nwriteRawValue(String)\nwriteRawValue(String,int,int)\nwriteRawValue(char[],int,int)\nwriteStartArray()\nwriteStartArray(int)\nwriteStartObject()\nwriteString(SerializableString)\nwriteString(String)\nwriteString(char[],int,int)\nwriteTypeId(Object)\nwriteUTF8String(byte[],int,int)"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "exit()"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Top_1 : com.fasterxml.jackson.core.json.UTF8JsonGenerator.writeNumber(BigDecimal)\nTop_2 : com.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(BigDecimal)\nTop_3 : com.fasterxml.jackson.core.util.JsonGeneratorDelegate.writeNumber(BigDecimal)\nTop_4 : com.fasterxml.jackson.core.filter.FilteringGeneratorDelegate.writeNumber(BigDecimal)\nTop_5 : com.fasterxml.jackson.core.json.WriterBasedJsonGenerator.writeNumber(double)"
+    }
+]

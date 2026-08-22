@@ -1,0 +1,142 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* get_code_snippet_of_method(`method_number`) -> Get the code snippet of the java method. `method_number` -> The number of the java methods suggested. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer.  *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:BigDecimal values via @JsonTypeInfo/@JsonSubTypes get rounded\nDescription:\nWhen using an ObjectMapper to serialize/deserialize a class with an Object field annotated with a @JsonSubTypes.Type that indicate BigDecimal, it looks like the value is getting rounded to a double.\nI tried configuring DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, but that didn't seem to help.\nWhat I think is a valid repro is below, but let me know if I'm actually doing something wrong here.\nThanks!\nimport org.junit.Test;\nimport org.junit.Assert;\n\nimport java.math.BigDecimal;\n\nimport com.fasterxml.jackson.annotation.*;\nimport com.fasterxml.jackson.databind.DeserializationFeature;\nimport com.fasterxml.jackson.databind.ObjectMapper;\n\npublic class JacksonTest {\n\n    enum Type { BIG_DECIMAL }\n\n    static class Wrapper {\n\n        @JsonIgnore\n        Type typeEnum;\n\n        @JsonIgnore\n        Object value;\n\n        Wrapper() { }\n\n        @JsonGetter(value = \"type\")\n        String getTypeString() {\n            return typeEnum.name();\n        }\n\n        @JsonSetter(value = \"type\")\n        void setTypeString(String type) {\n            this.typeEnum = Type.valueOf(type);\n        }\n\n        @JsonGetter(value = \"objectValue\") \n        Object getValue() {\n            return value;\n        }\n\n        @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXTERNAL_PROPERTY, property = \"type\")\n        @JsonSubTypes({ @JsonSubTypes.Type(name = \"BIG_DECIMAL\", value = BigDecimal.class) })\n        @JsonSetter(value = \"objectValue\") \n        private void setValue(Object value) {\n            this.value = value;\n        }\n    }\n\n    @Test\n    public void test() throws Exception {\n\n        ObjectMapper m = new ObjectMapper();\n        m.configure(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, true);\n\n        Wrapper w = new Wrapper();\n        w.typeEnum = Type.BIG_DECIMAL;\n        w.value = new BigDecimal(\"-10000000000.0000000001\");\n\n        String json = m.writeValueAsString(w);\n        Wrapper w2 = m.readValue(json, Wrapper.class);\n\n        Assert.assertEquals(w.typeEnum, w2.typeEnum);\n        Assert.assertTrue(String.format(\"Expected %s = %s; got back %s = %s\",\n            w.value.getClass().getSimpleName(), w.value.toString(), w2.value.getClass().getSimpleName(), w2.value.toString()),\n            w.value.equals(w2.value));\n    }\n}\n\n```\nThe trigger test is as follows:\n```\npublic void testBigDecimal965() throws Exception\n    {\n\n        Wrapper965 w = new Wrapper965();\n        w.typeEnum = Type965.BIG_DECIMAL;\n        final String NUM_STR = \"-10000000000.0000000001\";\n        w.value = new BigDecimal(NUM_STR);\n\n        String json = MAPPER.writeValueAsString(w);\n\n        // simple sanity check so serialization is faithful\n        if (!json.contains(NUM_STR)) {\n            fail(\"JSON content should contain value '\"+NUM_STR+\"', does not appear to: \"+json);\n        }\n        \n        Wrapper965 w2 = MAPPER.readerFor(Wrapper965.class)\n                .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)\n                .readValue(json);\n\n        assertEquals(w.typeEnum, w2.typeEnum);\n        assertTrue(String.format(\"Expected %s = %s; got back %s = %s\",\nThe last line shown above failed with the following stack trace.\njunit.framework.AssertionFailedError: Expected BigDecimal = -10000000000.0000000001; got back BigDecimal = -1.0E+10\n\tat com.fasterxml.jackson.databind.jsontype.TestExternalId.testBigDecimal965(TestExternalId.java:564)\n```\nThe suggested methods are as follows:\n```\n1.com.fasterxml.jackson.databind.util.TokenBuffer.copyCurrentEvent(JsonParser)\n2.com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector.findNameForSerialization(Annotated)\n3.com.fasterxml.jackson.databind.util.TokenBuffer.serialize(JsonGenerator)\n4.com.fasterxml.jackson.databind.deser.impl.ExternalTypeHandler.handleTypePropertyValue(JsonParser,DeserializationContext,String,Object)\n5.com.fasterxml.jackson.databind.ser.BeanSerializerFactory.removeOverlappingTypeIds(SerializerProvider,BeanDescription,BeanSerializerBuilder,List<BeanPropertyWriter>)\n6.com.fasterxml.jackson.databind.PropertyName.hasNamespace()\n7.com.fasterxml.jackson.databind.ser.BeanPropertyWriter.assignTypeSerializer(TypeSerializer)\n8.com.fasterxml.jackson.databind.util.TokenBuffer.Parser.getDoubleValue()\n9.com.fasterxml.jackson.databind.util.TokenBuffer.writeNumber(double)\n10.com.fasterxml.jackson.databind.util.TokenBuffer.Parser.getDecimalValue()\n11.com.fasterxml.jackson.databind.deser.std.NumberDeserializers.NumberDeserializer.deserialize(JsonParser,DeserializationContext)\n12.com.fasterxml.jackson.databind.deser.std.UntypedObjectDeserializer.Vanilla.deserializeWithType(JsonParser,DeserializationContext,TypeDeserializer)\n13.com.fasterxml.jackson.databind.ser.std.NumberSerializer.acceptJsonFormatVisitor(JsonFormatVisitorWrapper,JavaType)\n14.com.fasterxml.jackson.databind.deser.std.UntypedObjectDeserializer.deserializeWithType(JsonParser,DeserializationContext,TypeDeserializer)\n15.com.fasterxml.jackson.databind.deser.std.NumberDeserializers.find(Class<?>,String)\n16.com.fasterxml.jackson.databind.util.TokenBuffer.Parser.Parser(Segment,ObjectCodec,boolean,boolean)\n17.com.fasterxml.jackson.databind.ObjectMapper.writeValueAsString(Object)\n18.com.fasterxml.jackson.databind.ObjectMapper.readValue(String,Class<T>)\n19.com.fasterxml.jackson.databind.JsonNode.asText(String)\n20.com.fasterxml.jackson.databind.JsonDeserializer.deserialize(JsonParser,DeserializationContext,T)\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "To locate the faulty methods, we need to understand the context of the bug report and the trigger test. The bug report mentions that BigDecimal values are being rounded to double during deserialization. The trigger test shows a similar issue where the BigDecimal value is not correctly deserialized.\n\nWe can start by looking at the methods related to deserialization and BigDecimal handling:\n\n1. `com.fasterxml.jackson.databind.deser.std.NumberDeserializers.NumberDeserializer.deserialize(JsonParser,DeserializationContext)` - This method handles deserialization of numbers, including BigDecimals.\n2. `com.fasterxml.jackson.databind.deser.std.UntypedObjectDeserializer.Vanilla.deserializeWithType(JsonParser,DeserializationContext,TypeDeserializer)` - This method is used for deserializing objects, which might involve BigDecimals.\n3. `com.fasterxml.jackson.databind.ObjectMapper.readValue(String,Class<T>)` - This method is responsible for reading JSON strings into objects, potentially involving BigDecimals.\n\nLet's call the function to get the code snippets of these methods to understand their implementation better.\n```python\ndef get_code_snippet_of_method(method_number):\n    # Function to get the code snippet of the specified method\n    pass\n\n# Call the function to get the code snippets\ncode_snippet_1 = get_code_snippet_of_method(1)\ncode_snippet_2 = get_code_snippet_of_method(2)\ncode_snippet_3 = get_code_snippet_of_method(3)\ncode_snippet_4 = get_code_snippet_of_method(4)\ncode_snippet_5 = get_code_snippet_of_method(5)\n```\nAfter obtaining the code snippets, we can analyze them to identify any issues related to BigDecimal handling or rounding. We'll look for patterns or potential errors in the deserialization process, especially focusing on how BigDecimals are handled and compared. Once we find the problematic lines, we can narrow down the list of suspect methods."
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(1)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.util.TokenBuffer.copyCurrentEvent(JsonParser) is as follows.\n@Override\t    public void copyCurrentEvent(JsonParser p) throws IOException\t    {\t        if (_mayHaveNativeIds) {\t            _checkNativeIds(p);\t        }\t        switch (p.getCurrentToken()) {\t        case START_OBJECT:\t            writeStartObject();\t            break;\t        case END_OBJECT:\t            writeEndObject();\t            break;\t        case START_ARRAY:\t            writeStartArray();\t            break;\t        case END_ARRAY:\t            writeEndArray();\t            break;\t        case FIELD_NAME:\t            writeFieldName(p.getCurrentName());\t            break;\t        case VALUE_STRING:\t            if (p.hasTextCharacters()) {\t                writeString(p.getTextCharacters(), p.getTextOffset(), p.getTextLength());\t            } else {\t                writeString(p.getText());\t            }\t            break;\t        case VALUE_NUMBER_INT:\t            switch (p.getNumberType()) {\t            case INT:\t                writeNumber(p.getIntValue());\t                break;\t            case BIG_INTEGER:\t                writeNumber(p.getBigIntegerValue());\t                break;\t            default:\t                writeNumber(p.getLongValue());\t            }\t            break;\t        case VALUE_NUMBER_FLOAT:\t                /* 10-Oct-2015, tatu: Ideally we would first determine whether underlying\t                 *   number is already decoded into a number (in which case might as well\t                 *   access as number); or is still retained as text (in which case we\t                 *   should further defer decoding that may not need BigDecimal):\t                 */\t                switch (p.getNumberType()) {\t                case BIG_DECIMAL:\t                    writeNumber(p.getDecimalValue());\t                    break;\t                case FLOAT:\t                    writeNumber(p.getFloatValue());\t                    break;\t                default:\t                    writeNumber(p.getDoubleValue());\t            }\t            break;\t        case VALUE_TRUE:\t            writeBoolean(true);\t            break;\t        case VALUE_FALSE:\t            writeBoolean(false);\t            break;\t        case VALUE_NULL:\t            writeNull();\t            break;\t        case VALUE_EMBEDDED_OBJECT:\t            writeObject(p.getEmbeddedObject());\t            break;\t        default:\t            throw new RuntimeException(\"Internal error: should never end up through this code path\");\t        }\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(2)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector.findNameForSerialization(Annotated) is as follows.\n@Override\t    public PropertyName findNameForSerialization(Annotated a)\t    {\t        String name = null;\t\t        JsonGetter jg = _findAnnotation(a, JsonGetter.class);\t        if (jg != null) {\t            name = jg.value();\t        } else {\t            JsonProperty pann = _findAnnotation(a, JsonProperty.class);\t            if (pann != null) {\t                name = pann.value();\t            } else if (_hasAnnotation(a, JsonSerialize.class)\t                    || _hasAnnotation(a, JsonView.class)\t                    || _hasAnnotation(a, JsonRawValue.class)) {\t                name = \"\";\t            } else {\t                return null;\t            }\t        }\t        return PropertyName.construct(name);\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(3)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.util.TokenBuffer.serialize(JsonGenerator) is as follows.\n/**\t     * Helper method that will write all contents of this buffer\t     * using given {@link JsonGenerator}.\t     *<p>\t     * Note: this method would be enough to implement\t     * <code>JsonSerializer</code>  for <code>TokenBuffer</code> type;\t     * but we can not have upwards\t     * references (from core to mapper package); and as such we also\t     * can not take second argument.\t     */\t    public void serialize(JsonGenerator gen) throws IOException\t    {\t        Segment segment = _first;\t        int ptr = -1;\t\t        final boolean checkIds = _mayHaveNativeIds;\t        boolean hasIds = checkIds && (segment.hasIds());\t\t        while (true) {\t            if (++ptr >= Segment.TOKENS_PER_SEGMENT) {\t                ptr = 0;\t                segment = segment.next();\t                if (segment == null) break;\t                hasIds = checkIds && (segment.hasIds());\t            }\t            JsonToken t = segment.type(ptr);\t            if (t == null) break;\t\t            if (hasIds) {\t                Object id = segment.findObjectId(ptr);\t                if (id != null) {\t                    gen.writeObjectId(id);\t                }\t                id = segment.findTypeId(ptr);\t                if (id != null) {\t                    gen.writeTypeId(id);\t                }\t            }\t            \t            // Note: copied from 'copyCurrentEvent'...\t            switch (t) {\t            case START_OBJECT:\t                gen.writeStartObject();\t                break;\t            case END_OBJECT:\t                gen.writeEndObject();\t                break;\t            case START_ARRAY:\t                gen.writeStartArray();\t                break;\t            case END_ARRAY:\t                gen.writeEndArray();\t                break;\t            case FIELD_NAME:\t            {\t                // 13-Dec-2010, tatu: Maybe we should start using different type tokens to reduce casting?\t                Object ob = segment.get(ptr);\t                if (ob instanceof SerializableString) {\t                    gen.writeFieldName((SerializableString) ob);\t                } else {\t                    gen.writeFieldName((String) ob);\t                }\t            }\t                break;\t            case VALUE_STRING:\t                {\t                    Object ob = segment.get(ptr);\t                    if (ob instanceof SerializableString) {\t                        gen.writeString((SerializableString) ob);\t                    } else {\t                        gen.writeString((String) ob);\t                    }\t                }\t                break;\t            case VALUE_NUMBER_INT:\t                {\t                    Object n = segment.get(ptr);\t                    if (n instanceof Integer) {\t                        gen.writeNumber((Integer) n);\t                    } else if (n instanceof BigInteger) {\t                        gen.writeNumber((BigInteger) n);\t                    } else if (n instanceof Long) {\t                        gen.writeNumber((Long) n);\t                    } else if (n instanceof Short) {\t                        gen.writeNumber((Short) n);\t                    } else {\t                        gen.writeNumber(((Number) n).intValue());\t                    }\t                }\t                break;\t            case VALUE_NUMBER_FLOAT:\t                {\t                    Object n = segment.get(ptr);\t                    if (n instanceof Double) {\t                        gen.writeNumber(((Double) n).doubleValue());\t                    } else if (n instanceof BigDecimal) {\t                        gen.writeNumber((BigDecimal) n);\t                    } else if (n instanceof Float) {\t                        gen.writeNumber(((Float) n).floatValue());\t                    } else if (n == null) {\t                        gen.writeNull();\t                    } else if (n instanceof String) {\t                        gen.writeNumber((String) n);\t                    } else {\t                        throw new JsonGenerationException(\"Unrecognized value type for VALUE_NUMBER_FLOAT: \"+n.getClass().getName()+\", can not serialize\");\t                    }\t                }\t                break;\t            case VALUE_TRUE:\t                gen.writeBoolean(true);\t                break;\t            case VALUE_FALSE:\t                gen.writeBoolean(false);\t                break;\t            case VALUE_NULL:\t                gen.writeNull();\t                break;\t            case VALUE_EMBEDDED_OBJECT:\t                {\t                    Object value = segment.get(ptr);\t                    if (value instanceof RawValue) {\t                        ((RawValue) value).serialize(gen);\t                    } else {\t                        gen.writeObject(value);\t                    }\t                }\t                break;\t            default:\t                throw new RuntimeException(\"Internal error: should never end up through this code path\");\t            }\t        }\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(4)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.deser.impl.ExternalTypeHandler.handleTypePropertyValue(JsonParser,DeserializationContext,String,Object) is as follows.\n/**\t     * Method called to see if given property/value pair is an external type\t     * id; and if so handle it. This is <b>only</b> to be called in case\t     * containing POJO has similarly named property as the external type id;\t     * otherwise {@link #handlePropertyValue} should be called instead.\t     */\t    public boolean handleTypePropertyValue(JsonParser jp, DeserializationContext ctxt,\t            String propName, Object bean)\t        throws IOException\t    {\t        Integer I = _nameToPropertyIndex.get(propName);\t        if (I == null) {\t            return false;\t        }\t        int index = I.intValue();\t        ExtTypedProperty prop = _properties[index];\t        if (!prop.hasTypePropertyName(propName)) {\t            return false;\t        }\t        String typeId = jp.getText();\t        // note: can NOT skip child values (should always be String anyway)\t        boolean canDeserialize = (bean != null) && (_tokens[index] != null);\t        // Minor optimization: deserialize properties as soon as we have all we need:\t        if (canDeserialize) {\t            _deserializeAndSet(jp, ctxt, bean, index, typeId);\t            // clear stored data, to avoid deserializing+setting twice:\t            _tokens[index] = null;\t        } else {\t            _typeIds[index] = typeId;\t        }\t        return true;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(5)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.ser.BeanSerializerFactory.removeOverlappingTypeIds(SerializerProvider,BeanDescription,BeanSerializerBuilder,List<BeanPropertyWriter>) is as follows.\n/**\t     * Helper method called to ensure that we do not have \"duplicate\" type ids.\t     * Added to resolve [databind#222]\t     *\t     * @since 2.6\t     */\t    protected List<BeanPropertyWriter> removeOverlappingTypeIds(SerializerProvider prov,\t            BeanDescription beanDesc, BeanSerializerBuilder builder,\t            List<BeanPropertyWriter> props)\t    {\t        for (int i = 0, end = props.size(); i < end; ++i) {\t            BeanPropertyWriter bpw = props.get(i);\t            TypeSerializer td = bpw.getTypeSerializer();\t            if ((td == null) || (td.getTypeInclusion() != As.EXTERNAL_PROPERTY)) {\t                continue;\t            }\t            String n = td.getPropertyName();\t            PropertyName typePropName = PropertyName.construct(n);\t\t            for (BeanPropertyWriter w2 : props) {\t                if ((w2 != bpw) && w2.wouldConflictWithName(typePropName)) {\t                    bpw.assignTypeSerializer(null);\t                    break;\t                }\t            }\t        }\t        return props;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(6)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.PropertyName.hasNamespace() is as follows.\npublic boolean hasNamespace() {\t        return _namespace != null;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(7)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.ser.BeanPropertyWriter.assignTypeSerializer(TypeSerializer) is as follows.\n/**\t     * Method called to set, reset or clear the configured type serializer\t     * for property.\t     *\t     * @since 2.6\t     */\t    public void assignTypeSerializer(TypeSerializer typeSer) {\t        _typeSerializer = typeSer;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(8)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.util.TokenBuffer.Parser.getDoubleValue() is as follows.\n@Override\t        public double getDoubleValue() throws IOException {\t            return getNumberValue().doubleValue();\t        }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(9)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.util.TokenBuffer.writeNumber(double) is as follows.\n@Override\t    public void writeNumber(double d) throws IOException {\t        _append(JsonToken.VALUE_NUMBER_FLOAT, Double.valueOf(d));\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(10)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of com.fasterxml.jackson.databind.util.TokenBuffer.Parser.getDecimalValue() is as follows.\n@Override\t        public BigDecimal getDecimalValue() throws IOException\t        {\t            Number n = getNumberValue();\t            if (n instanceof BigDecimal) {\t                return (BigDecimal) n;\t            }\t            switch (getNumberType()) {\t            case INT:\t            case LONG:\t                return BigDecimal.valueOf(n.longValue());\t            case BIG_INTEGER:\t                return new BigDecimal((BigInteger) n);\t            default:\t            }\t            // float or double\t            return BigDecimal.valueOf(n.doubleValue());\t        }"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Top_1 : com.fasterxml.jackson.databind.ObjectMapper.writeValueAsString(Object)\nTop_2 : com.fasterxml.jackson.databind.ObjectMapper.readValue(String,Class<T>)\nTop_3 : com.fasterxml.jackson.databind.deser.std.NumberDeserializers.NumberDeserializer.deserialize(JsonParser,DeserializationContext)\nTop_4 : com.fasterxml.jackson.databind.deser.std.UntypedObjectDeserializer.Vanilla.deserializeWithType(JsonParser,DeserializationContext,TypeDeserializer)\nTop_5 : com.fasterxml.jackson.databind.ObjectMapper.readValue(String,Class<T>)"
+    }
+]

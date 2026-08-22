@@ -1,0 +1,78 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* find_class(`class_name`) -> Find a class in the bug report by fuzzy search. `class_name` -> The name of the class. *\n* find_method(`method_name`) -> Find a method in the bug report by fuzzy search. `method_name` -> The name of the method. *\n* get_paths() -> Get the paths of the java software system. *\n* get_classes_of_path(`path_name`) -> Get the classes in the path of the java software system. `path_name` -> The accurate name of the path which can be accessed by function call `get_paths`. *\n* get_methods_of_class(`class_name`) -> Get the methods belonging to the class of the java software system. `class_name` -> The complete name of the class, for example `PathName.ClassName`. *\n* get_code_snippet_of_method(`method_name`) -> Get the code snippet of the java method. `method_name` -> The complete name of the java method, for example `PathName.ClassName.MethodName(ArgType1,ArgType2)`. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer. *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:JsonAnyGetter doesn't work with JsonSerialize (except with keyUsing)\nDescription:\n(This is happening with 2.5.0. Haven't tried 2.5.1 but I couldn't see any related issue anyway)\nJackson ignores JsonSerialize annotation when there is JsonAnyGetter annotation.\n  @JsonSerialize(using = MySerializer.class)\n  // or\n  @JsonSerialize(converter = MyConverter.class)\n  @JsonAnyGetter\n  public Map<String, String> getParameters(){\n    return parameters;\n  }\nexcept\n@JsonSerialize(keyUsing = MyKeySerializer.class)\n(haven't tried each setting. Only tried keyUsing because I've seen a different issue (#661) with it)\nThen it works. But I need the converter, so..\nFor the time being I will use\n  @JsonAnyGetter\n  public Map<String, JsonNode> getParameters(){\n    return new MyConverter().convert(parameters);\n  }\nbut I'd prefer to stick to annotations.\n\n```\nThe trigger test is as follows:\n```\npublic void testIssue705() throws Exception\n    {\n        Issue705Bean input = new Issue705Bean(\"key\", \"value\");        \n        String json = MAPPER.writeValueAsString(input);\n        assertEquals(\"{\\\"stuff\\\":\\\"[key/value]\\\"}\", json);\nThe last line shown above failed with the following stack trace.\njunit.framework.ComparisonFailure: expected:<{\"[stuff\":\"[key/value]]\"}> but was:<{\"[key\":\"value]\"}>\n\tat com.fasterxml.jackson.databind.ser.TestAnyGetter.testIssue705(TestAnyGetter.java:139)\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "To locate the faulty methods, we should follow these steps:\n\n1. Identify the problematic class: The bug description mentions that the issue occurs with the `Issue705Bean` class. We can find this class using the `find_class` function.\n\n2. Identify the problematic method: The bug description mentions that the issue occurs with the `@JsonAnyGetter` method. We can find this method using the `find_method` function.\n\n3. Analyze the method's behavior: Once we have identified the problematic method, we can analyze its behavior by getting the code snippet using the `get_code_snippet_of_method` function.\n\n4. Compare the actual output with the expected output: The trigger test provides a stack trace showing the failure. We can compare the actual output with the expected output to understand the issue better.\n\nLet's start by finding the problematic class.\n\nCalling `find_class('Issue705Bean')` to locate the problematic class."
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_class('Issue705Bean')"
+    },
+    {
+        "role": "user",
+        "content": "Do not find `Issue705Bean` again because it is an invalid name. You can try the following names.\nIntDeser\nValueNode\nObjectIdMap\nBuilder\nMultiView"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_class('IntDeser')"
+    },
+    {
+        "role": "user",
+        "content": "com.fasterxml.jackson.databind.deser.std.PrimitiveArrayDeserializers.IntDeser"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "find_method('getParameters')"
+    },
+    {
+        "role": "user",
+        "content": "com.fasterxml.jackson.databind.deser.impl.PropertyValueBuffer.getParameters(Object[])"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method('getParameters')"
+    },
+    {
+        "role": "user",
+        "content": "Do you mean `com.fasterxml.jackson.databind.deser.impl.PropertyValueBuffer.getParameters(Object[])`? Its code snippet is as follows.\n/**\t     * @param defaults If any of parameters requires nulls to be replaced with a non-null\t     *    object (usually primitive types), this is a non-null array that has such replacement\t     *    values (and nulls for cases where nulls are ok)\t     */\t    protected final Object[] getParameters(Object[] defaults)\t    {\t        if (defaults != null) {\t            for (int i = 0, len = _creatorParameters.length; i < len; ++i) {\t                if (_creatorParameters[i] == null) {\t                    Object value = defaults[i];\t                    if (value != null) {\t                        _creatorParameters[i] = value;\t                    }\t                }\t            }\t        }\t        return _creatorParameters;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "exit()"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Top_1 : com.fasterxml.jackson.databind.ObjectMapper.writeValueAsString\nTop_2 : com.fasterxml.jackson.databind.ser.TestAnyGetter.testIssue705\nTop_3 : com.fasterxml.jackson.databind.deser.std.PrimitiveArrayDeserializers.IntDeser.getParameters\nTop_4 : com.fasterxml.jackson.databind.deser.impl.PropertyValueBuffer.getParameters\nTop_5 : com.fasterxml.jackson.databind.JsonSerializer.serialize"
+    }
+]

@@ -1,0 +1,142 @@
+[
+    {
+        "role": "system",
+        "content": "You are a debugging assistant of our Java software. You will be presented with a bug report, a trigger test and tools (functions) to access the source code of the system under test (SUT). Your task is to locate the top-5 most likely culprit methods based on the bug report, the trigger test and the information you retrieve using given functions. \nFunction calls you can use are as follows.\n* get_code_snippet_of_method(`method_number`) -> Get the code snippet of the java method. `method_number` -> The number of the java methods suggested. *\n* exit() -> Exit function calling to give your final answer when you are confident of the answer.  *\nYou have 10 chances to call function."
+    },
+    {
+        "role": "user",
+        "content": "The bug report is as follows:\n```\nTitle:Quadratic behaviour on deeply nested pages\nDescription:\nOn pages with very deep sequence of elements (like this one sv.stargate.wikia.com/wiki/M2J), Jsoup gets very slow and spends too much time in this function:\nhttps://github.com/jhy/jsoup/blob/master/src/main/java/org/jsoup/parser/HtmlTreeBuilder.java#L462\nIs there any way to remove this quadratic behaviour? Either by using better data structures or by having option to limit stack size (and throw exception when it is too deep).\n\n```\nThe trigger test is as follows:\n```\npublic void handlesDeepStack() {\n        // inspired by http://sv.stargate.wikia.com/wiki/M2J and https://github.com/jhy/jsoup/issues/955\n        // I didn't put it in the integration tests, because explorer and intellij kept dieing trying to preview/index it\n\n        // Arrange\n        StringBuilder longBody = new StringBuilder(500000);\n        for (int i = 0; i < 25000; i++) {\n            longBody.append(i).append(\"<dl><dd>\");\n        }\n        for (int i = 0; i < 25000; i++) {\n            longBody.append(i).append(\"</dd></dl>\");\n        }\n\n        // Act\n        long start = System.currentTimeMillis();\n        Document doc = Parser.parseBodyFragment(longBody.toString(), \"\");\n\n        // Assert\n        assertEquals(2, doc.body().childNodeSize());\n        assertEquals(25000, doc.select(\"dd\").size());\n        assertTrue(System.currentTimeMillis() - start < 1000);\nThe last line shown above failed with the following stack trace.\njunit.framework.AssertionFailedError\n\tat org.jsoup.parser.HtmlParserTest.handlesDeepStack(HtmlParserTest.java:924)\n```\nThe suggested methods are as follows:\n```\n1.org.jsoup.parser.HtmlTreeBuilder.insert(Token.Comment)\n2.org.jsoup.parser.HtmlTreeBuilder.inTableScope(String)\n3.org.jsoup.parser.Parser.Parser(TreeBuilder)\n4.org.jsoup.parser.HtmlTreeBuilder.inScope(String,String[])\n5.org.jsoup.helper.StringUtil.sort(String[])\n6.org.jsoup.parser.HtmlTreeBuilder.isSpecial(Element)\n7.org.jsoup.nodes.Node.remove()\n8.org.jsoup.parser.Parser.parseBodyFragment(String,String)\n9.org.jsoup.nodes.Document.createShell(String)\n10.org.jsoup.nodes.Element.appendElement(String)\n11.org.jsoup.examples.HtmlToPlainText.main(String)\n12.org.jsoup.Jsoup.connect(String)\n13.org.jsoup.helper.HttpConnection.Response.execute(Connection.Request,Response)\n14.org.jsoup.examples.ListLinks.main(String[])\n15.org.jsoup.nodes.Element.dataset()\n16.org.jsoup.parser.Parser.parseBodyFragment(String,String)\n17.org.jsoup.Jsoup.parseBodyFragment(String)\n18.org.jsoup.Jsoup.parseBodyFragment(String,String)\n19.org.jsoup.parser.HtmlTreeBuilder.state()\n20.org.jsoup.parser.HtmlTreeBuilder.state()\n```\nLet's locate the faulty method step by step using reasoning and function calls. Now reason and plan how to locate the buggy methods."
+    },
+    {
+        "role": "Assistant",
+        "content": "Based on the bug report and the trigger test, we know that the issue is related to handling deeply nested HTML pages, which causes Jsoup to become slow. The problematic function is mentioned in the bug report as being located at line 462 of the HtmlTreeBuilder class.\n\nWe should start by examining the methods that are related to parsing and handling deeply nested HTML structures. From the list of suggested methods, let's focus on those that might involve parsing or manipulating nested elements:\n\n1. `org.jsoup.parser.HtmlTreeBuilder.insert(Token.Comment)`\n2. `org.jsoup.parser.HtmlTreeBuilder.inTableScope(String)`\n3. `org.jsoup.parser.Parser.Parser(TreeBuilder)`\n4. `org.jsoup.parser.HtmlTreeBuilder.inScope(String,String[])`\n5. `org.jsoup.parser.HtmlTreeBuilder.isSpecial(Element)`\n6. `org.jsoup.nodes.Node.remove()`\n7. `org.jsoup.parser.Parser.parseBodyFragment(String,String)`\n8. `org.jsoup.nodes.Document.createShell(String)`\n9. `org.jsoup.nodes.Element.appendElement(String)`\n\nWe can eliminate some methods that don't seem directly related to parsing or handling nested elements:\n\n- `org.jsoup.helper.StringUtil.sort(String[])` doesn't seem to be relevant to the parsing process.\n- `org.jsoup.nodes.Element.dataset()` is related to getting attributes, not necessarily to parsing deeply nested structures.\n- `org.jsoup.Jsoup.connect(String)` and `org.jsoup.helper.HttpConnection.Response.execute(Connection.Request,Response)` are related to HTTP requests and responses, not parsing.\n- `org.jsoup.examples.HtmlToPlainText.main(String)` and `org.jsoup.Jsoup.parseBodyFragment(String)` are examples and parsing methods, respectively, but they might not be directly involved in the issue described.\n- `org.jsoup.nodes.Element.appendElement(String)` could potentially be involved in adding elements to the document, but it's not clear if it's part of the problem without more context.\n\nNow, let's examine the remaining methods:\n\n- `org.jsoup.parser.HtmlTreeBuilder.insert(Token.Comment)` seems like it might be involved in inserting comments into the tree builder, which could affect performance on deeply nested pages.\n- `org.jsoup.parser.HtmlTreeBuilder.inTableScope(String)` and `org.jsoup.parser.HtmlTreeBuilder.inScope(String,String[])` could be related to managing scopes within the tree builder, which might impact performance on deeply nested structures.\n- `org.jsoup.parser.Parser.Parser(TreeBuilder)` and `org.jsoup.parser.HtmlTreeBuilder.state()` are related to the parsing process itself, so they're likely candidates for the issue.\n\nWe'll start by calling `get_code_snippet_of_method` for these methods to understand their context and behavior better:\n\n1. `get_code_snippet_of_method(1)`\n2. `get_code_snippet_of_method(2)`\n3. `get_code_snippet_of_method(3)`\n4. `get_code_snippet_of_method(4)`\n5. `get_code_snippet_of_method(5)`\n6. `get_code_snippet_of_method(6)`\n7. `get_code_snippet_of_method(7)`\n8. `get_code_snippet_of_method(8)`\n9. `get_code_snippet_of_method(9)`\n10. `get_code_snippet_of_method(10)`\n11. `get_code_snippet_of_method(11)`\n12. `get_code_snippet_of_method(12)`\n13. `get_code_snippet_of_method(13)`\n14. `get_code_snippet_of_method(14)`\n15. `get_code_snippet_of_method(15)`\n16. `get_code_snippet_of_method(16)`\n17. `get_code_snippet_of_method(17)`\n18. `get_code_snippet_of_method(18)`\n19. `get_code_snippet_of_method(19)`\n20. `get_code_snippet_of_method(20)`\n\nAfter reviewing the code snippets, we can determine which methods are most likely to be the culprits based on their functionality and the context provided by the bug report and trigger test."
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(1)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.parser.HtmlTreeBuilder.insert(Token.Comment) is as follows.\nvoid insert(Token.Comment commentToken) {\t        Comment comment = new Comment(commentToken.getData());\t        insertNode(comment);\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(2)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.parser.HtmlTreeBuilder.inTableScope(String) is as follows.\nboolean inTableScope(String targetName) {\t        return inSpecificScope(targetName, TagSearchTableScope, null);\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(3)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.parser.Parser.Parser(TreeBuilder) is as follows.\n/**\t     * Create a new Parser, using the specified TreeBuilder\t     * @param treeBuilder TreeBuilder to use to parse input into Documents.\t     */\t    public Parser(TreeBuilder treeBuilder) {\t        this.treeBuilder = treeBuilder;\t        settings = treeBuilder.defaultSettings();\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(4)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.parser.HtmlTreeBuilder.inScope(String,String[]) is as follows.\nboolean inScope(String targetName, String[] extras) {\t        return inSpecificScope(targetName, TagsSearchInScope, extras);\t        // todo: in mathml namespace: mi, mo, mn, ms, mtext annotation-xml\t        // todo: in svg namespace: forignOjbect, desc, title\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(5)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.helper.StringUtil.sort(String[]) is as follows.\npublic static String[] sort(String[] array) {\t        Arrays.sort(array);\t        return array;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(6)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.parser.HtmlTreeBuilder.isSpecial(Element) is as follows.\nboolean isSpecial(Element el) {\t        // todo: mathml's mi, mo, mn\t        // todo: svg's foreigObject, desc, title\t        String name = el.nodeName();\t        return inSorted(name, TagSearchSpecial);\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(7)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.nodes.Node.remove() is as follows.\n/**\t     * Remove (delete) this node from the DOM tree. If this node has children, they are also removed.\t     */\t    public void remove() {\t        Validate.notNull(parentNode);\t        parentNode.removeChild(this);\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(8)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.parser.Parser.parseBodyFragment(String,String) is as follows.\n/**\t     * Parse a fragment of HTML into the {@code body} of a Document.\t     *\t     * @param bodyHtml fragment of HTML\t     * @param baseUri base URI of document (i.e. original fetch location), for resolving relative URLs.\t     *\t     * @return Document, with empty head, and HTML parsed into body\t     */\t    public static Document parseBodyFragment(String bodyHtml, String baseUri) {\t        Document doc = Document.createShell(baseUri);\t        Element body = doc.body();\t        List<Node> nodeList = parseFragment(bodyHtml, body, baseUri);\t        Node[] nodes = nodeList.toArray(new Node[nodeList.size()]); // the node list gets modified when re-parented\t        for (int i = nodes.length - 1; i > 0; i--) {\t            nodes[i].remove();\t        }\t        for (Node node : nodes) {\t            body.appendChild(node);\t        }\t        return doc;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(9)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.nodes.Document.createShell(String) is as follows.\n/**\t     Create a valid, empty shell of a document, suitable for adding more elements to.\t     @param baseUri baseUri of document\t     @return document with html, head, and body elements.\t     */\t    public static Document createShell(String baseUri) {\t        Validate.notNull(baseUri);\t\t        Document doc = new Document(baseUri);\t        Element html = doc.appendElement(\"html\");\t        html.appendElement(\"head\");\t        html.appendElement(\"body\");\t\t        return doc;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Now call a function in this format `FunctionName(Argument)` in a single line without any other word."
+    },
+    {
+        "role": "Assistant",
+        "content": "get_code_snippet_of_method(10)"
+    },
+    {
+        "role": "user",
+        "content": "The code snippet of org.jsoup.nodes.Element.appendElement(String) is as follows.\n/**\t     * Create a new element by tag name, and add it as the last child.\t     * \t     * @param tagName the name of the tag (e.g. {@code div}).\t     * @return the new element, to allow you to add content to it, e.g.:\t     *  {@code parent.appendElement(\"h1\").attr(\"id\", \"header\").text(\"Welcome\");}\t     */\t    public Element appendElement(String tagName) {\t        Element child = new Element(Tag.valueOf(tagName), baseUri());\t        appendChild(child);\t        return child;\t    }"
+    },
+    {
+        "role": "user",
+        "content": "Based on the available information, provide complete name of the top-5 most likely culprit methods for the bug please. Since your answer will be processed automatically, please give your answer in the format as follows.\nTop_1 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_2 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_3 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_4 : PathName.ClassName.MethodName(ArgType1, ArgType2)\nTop_5 : PathName.ClassName.MethodName(ArgType1, ArgType2)\n"
+    },
+    {
+        "role": "Assistant",
+        "content": "Top_1 : org.jsoup.parser.HtmlTreeBuilder.insert(Token.Comment)\nTop_2 : org.jsoup.parser.HtmlTreeBuilder.inScope(String,String[])\nTop_3 : org.jsoup.parser.Parser.Parser(TreeBuilder)\nTop_4 : org.jsoup.parser.HtmlTreeBuilder.isSpecial(Element)\nTop_5 : org.jsoup.parser.Parser.parseBodyFragment(String,String)"
+    }
+]
